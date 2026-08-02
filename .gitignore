@@ -1,0 +1,10 @@
+node_modules/
+auth.json
+*.auth-state.json
+test-results/
+playwright-report/
+.env
+.env.*
+*.log
+.DS_Store
+.e2e-engine/auth/
