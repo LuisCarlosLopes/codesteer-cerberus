@@ -96,7 +96,7 @@ export class ProdutosPage {
 
 ```ts
 // tests/e2e/produtos/criar-produto.spec.ts
-// spec: specs/produtos.plan.md
+// spec: .memory-bank/e2e-specs/produtos.plan.md
 // intent: produto criado aparece na lista como Ativo
 import { test, expect } from '../../fixtures';
 

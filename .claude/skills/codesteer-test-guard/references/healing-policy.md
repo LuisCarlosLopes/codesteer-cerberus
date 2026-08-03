@@ -122,7 +122,7 @@ volta a ser ruído em vez de sinal.
 
 Faça em vez disso:
 
-1. Classifique como `PRODUCT_BUG` — com citação literal do oráculo.
+1. Classifique como `PRODUCT_BUG` — com citação literal da fonte de verdade.
 2. Gere `bug_report.md`.
 3. **Deixe o teste vermelho.** Ele é a evidência viva do defeito.
 4. Registre em `escalations.md` que a suíte tem N vermelhos conhecidos e por quê.

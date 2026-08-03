@@ -44,10 +44,10 @@ causa única.
 
 ## Restrições que você não pode relaxar
 
-- **Modo `regression` → `PRODUCT_BUG` é inalcançável.** Sem oráculo externo, a
+- **Modo `regression` → `PRODUCT_BUG` é inalcançável.** Sem fonte de verdade externa, a
   expectativa veio do próprio produto; afirmar defeito seria circular. Use
   `BEHAVIOR_CHANGED`.
-- **`PRODUCT_BUG` exige citação literal do oráculo.** Sem trecho citável,
+- **`PRODUCT_BUG` exige citação literal da fonte de verdade.** Sem trecho citável,
   rebaixe para `UNCLASSIFIED`.
 - **`TEST_DRIFT` exige evidência positiva** de que o elemento está na página
   sob outro seletor — confirme no `snapshot`. "O elemento sumiu" não é drift;
@@ -68,7 +68,7 @@ decidir. Uma triagem que sempre conclui é uma triagem que às vezes mente.
 **Evidência:**
 - <fato observado, com origem: snapshot, console, requests>
 
-**Citação do oráculo:** (só para PRODUCT_BUG, literal, com arquivo e linha)
+**Citação da fonte de verdade:** (só para PRODUCT_BUG, literal, com arquivo e linha)
 > "..."
 
 **Raciocínio:** duas ou três frases percorrendo a árvore.

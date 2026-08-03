@@ -224,7 +224,7 @@ def relatar(achados: list[Achado], n_spec: int, n_po: int, como_json: bool) -> i
 
 # ---------------------------------------------------------------- self-test
 
-SPEC_LIMPO = """// spec: specs/produtos.plan.md
+SPEC_LIMPO = """// spec: .memory-bank/e2e-specs/produtos.plan.md
 // intent: produto criado aparece na lista como Ativo
 import { test, expect } from '../fixtures';
 test('cria produto', async ({ produtosPage }) => {

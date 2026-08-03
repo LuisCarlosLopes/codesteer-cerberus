@@ -53,7 +53,7 @@ Aqui os freios são **exit code**.
 
 ## Duas ideias que sustentam o resto
 
-**Sem oráculo externo, não existe "bug".** No modo `regression` a expectativa é
+**Sem fonte de verdade externa, não existe "bug".** No modo `regression` a expectativa é
 extraída do próprio produto — afirmar defeito seria circular. Só o modo
 `spec-driven`, com requisito escrito, pode classificar `PRODUCT_BUG`, e só
 citando o trecho contrariado **literalmente**. Sem citação, a classe é

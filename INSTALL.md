@@ -114,7 +114,7 @@ mecânica ao `playwright-cli`.
 - **`regression`** — sem requisito escrito. Congela o comportamento atual.
   Detecta *mudança*, não *defeito*.
 - **`spec-driven`** — com requisito, critério de aceite ou ticket. Único modo
-  que pode afirmar `PRODUCT_BUG`, e só com citação literal do oráculo.
+  que pode afirmar `PRODUCT_BUG`, e só com citação literal da fonte de verdade.
 
 ## Estrutura
 
@@ -135,7 +135,7 @@ skills/codesteer-test-guard/
 
 fixtures/app-under-test/          ← app de verificação, zero dependências
 ├── server.js                     ← CRUDL com 4 variantes de defeito plantado
-├── criterios-aceite.md           ← o ORÁCULO do modo spec-driven
+├── criterios-aceite.md           ← a FONTE DE VERDADE do modo spec-driven
 └── roteiro-verificacao.md        ← V1–V5 e a rubrica
 
 .claude/agents/{e2e-discovery,e2e-triage}.md    ← Claude Code

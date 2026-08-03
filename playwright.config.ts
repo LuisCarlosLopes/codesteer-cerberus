@@ -1,11 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 /**
- * Configuração Playwright — bootstrap do codesteer-test-guard (State 1: Init).
- * baseURL apontando para a URL alvo fornecida pelo usuário.
+ * Configuração Playwright — Sun Cash Tracker (dashboard, regression / RL).
  */
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir: './tests',
 
   fullyParallel: false,
   retries: 0,
@@ -17,7 +19,7 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: 'https://codesteer.vercel.app',
+    baseURL: 'https://sun-cash-tracker.vercel.app',
 
     actionTimeout: 10_000,
     navigationTimeout: 30_000,
@@ -29,9 +31,15 @@ export default defineConfig({
   },
 
   projects: [
+    { name: 'setup', testMatch: /.*\.setup\.ts/ },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: '.e2e-engine/auth/user.json',
+      },
+      dependencies: ['setup'],
+      testMatch: /.*\.spec\.ts/,
     },
   ],
 });

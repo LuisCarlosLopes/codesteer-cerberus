@@ -19,7 +19,7 @@ Não classifique sem ter as seis. Colete com a skill oficial:
 | # | Entrada | Como obter |
 | :---: | :--- | :--- |
 | 1 | `intent` do caso | O que o teste queria provar (do plan/spec) |
-| 2 | `oracleRef` | Fonte de verdade externa — só existe em `spec-driven` |
+| 2 | `truthRef` | Fonte de verdade externa — só existe em `spec-driven` |
 | 3 | Erro do Playwright | Saída do run: mensagem, stack, locator que falhou |
 | 4 | Estado da página | `playwright-cli snapshot` no ponto da falha |
 | 5 | Console e rede | `playwright-cli console`, `playwright-cli requests` |
@@ -50,14 +50,14 @@ Percorra na ordem. A primeira condição que casar define a classe.
 
 3. O modo é `regression`?
    └─ SIM → BEHAVIOR_CHANGED
-            Você não tem oráculo. Reporte a diferença entre o que foi
+            Você não tem fonte de verdade. Reporte a diferença entre o que foi
             capturado e o que aconteceu. NÃO julgue se é defeito.
             Pare aqui — PRODUCT_BUG é inalcançável em regression.
 
-4. Modo `spec-driven`: o comportamento observado contradiz o oráculo?
+4. Modo `spec-driven`: o comportamento observado contradiz a fonte de verdade?
    ├─ SIM, e você consegue citar o trecho literal → PRODUCT_BUG
    ├─ SIM, mas não consegue citar trecho nenhum   → UNCLASSIFIED
-   ├─ O oráculo é omisso sobre este ponto          → UNCLASSIFIED
+   ├─ A fonte de verdade é omissa sobre este ponto → UNCLASSIFIED
    └─ Sua confiança está abaixo de 0.8             → UNCLASSIFIED
 ```
 
@@ -67,13 +67,13 @@ Percorra na ordem. A primeira condição que casar define a classe.
 | :--- | :--- | :---: |
 | `INFRA_FLAKE` | Ambiente instável, não o produto nem o teste | Não (só retry) |
 | `TEST_DRIFT` | O teste endereça mal; a intenção continua válida | **Sim, sob gate** |
-| `BEHAVIOR_CHANGED` | O comportamento mudou; sem oráculo, não se sabe se é defeito | Não |
+| `BEHAVIOR_CHANGED` | O comportamento mudou; sem fonte de verdade, não se sabe se é defeito | Não |
 | `PRODUCT_BUG` | O produto contraria o requisito, com citação | Não |
 | `UNCLASSIFIED` | Não há base para decidir | Não |
 
 ## `PRODUCT_BUG` exige citação literal
 
-Sem trecho citável do oráculo, a classificação é `UNCLASSIFIED`. Sempre.
+Sem trecho citável da fonte de verdade, a classificação é `UNCLASSIFIED`. Sempre.
 
 Esta regra existe porque um classificador sem restrição inventa defeitos
 plausíveis. Se você está prestes a escrever "o sistema deveria validar o campo"
@@ -86,7 +86,7 @@ Formato no `bug_report.md`:
 ```markdown
 ## BUG-001 — Cadastro aceita nome vazio
 
-**Oráculo:** docs/criterios-aceite.md, linha 42
+**Fonte de verdade:** docs/criterios-aceite.md, linha 42
 > "O campo Nome é obrigatório e o formulário não pode ser submetido sem ele."
 
 **Observado:** o formulário foi submetido com Nome vazio e retornou 201.
@@ -109,4 +109,4 @@ veredito.
 | Chamar bug real de `TEST_DRIFT` | O elemento "sumiu" — mas sumiu porque o produto quebrou | Só use `TEST_DRIFT` se houver evidência positiva do elemento no DOM |
 | `PRODUCT_BUG` em modo `regression` | Impossível por construção | Volte ao passo 3 |
 | `INFRA_FLAKE` para toda falha intermitente | Intermitência também vem de race condition no produto | Três falhas idênticas = determinístico, reclassifique |
-| Inferir requisito do comportamento | Ausência de oráculo explícito | `UNCLASSIFIED` e pergunte ao usuário |
+| Inferir requisito do comportamento | Ausência de fonte de verdade explícita | `UNCLASSIFIED` e pergunte ao usuário |

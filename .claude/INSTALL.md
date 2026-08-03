@@ -97,7 +97,7 @@ mecânica ao `playwright-cli`.
 - **`regression`** — sem requisito escrito. Congela o comportamento atual.
   Detecta *mudança*, não *defeito*.
 - **`spec-driven`** — com requisito, critério de aceite ou ticket. Único modo
-  que pode afirmar `PRODUCT_BUG`, e só com citação literal do oráculo.
+  que pode afirmar `PRODUCT_BUG`, e só com citação literal da fonte de verdade.
 
 ## Estrutura
 

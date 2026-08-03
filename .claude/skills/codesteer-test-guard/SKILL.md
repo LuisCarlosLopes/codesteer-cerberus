@@ -30,7 +30,7 @@ O que esta skill acrescenta são seis restrições que o fluxo oficial não imp�
 O fluxo oficial roda contra qualquer URL. Este não.
 
 ```bash
-uv run scripts/guard.py --url <URL> --mode <regression|spec-driven> [--oracle <ref>]
+uv run scripts/guard.py --url <URL> --mode <regression|spec-driven> [--truth <ref>]
 ```
 
 - **exit 0** → prossiga. Leia `scope`: `CRUDL` libera criar/editar/apagar;
@@ -55,9 +55,10 @@ Declare ao usuário, em `regression`:
 > algo **mudou**, não que algo está **errado**. Não é possível afirmar "isto é
 > um bug" quando a expectativa foi extraída do próprio produto.
 
-O `plan.md` do fluxo oficial serve como spec em ambos os modos. Em
-`spec-driven`, cada cenário deve apontar para a fonte externa — requisito,
-ticket, contrato — não apenas para o que você observou navegando.
+O `plan.md` do fluxo oficial serve como spec em ambos os modos; grave-o em
+`.memory-bank/e2e-specs/<feature>.plan.md`. Em `spec-driven`, cada cenário deve
+apontar para a fonte externa — requisito, ticket, contrato — não apenas para o
+que você observou navegando.
 
 ### 3. Seletor ruim bloqueia a geração
 
@@ -99,7 +100,7 @@ usada durante o healing; o `spec_lint` é a varredura ampla do passo 7.
 e `// seed:` do fluxo oficial:
 
 ```ts
-// spec: specs/produtos.plan.md
+// spec: .memory-bank/e2e-specs/produtos.plan.md
 // intent: produto criado aparece na lista como Ativo
 ```
 
@@ -167,7 +168,7 @@ que pode escapar do teardown. Aviso não falha o build — confira e decida.
 2. DISCOVERY      → subagent e2e-discovery            ← delegado
 3. SELETORES      nível A–D vem do subagent; D bloqueia
 4. AUTH           setup project + storageState        ← esta skill
-5. PLAN           playwright-cli: plan.md             ← oficial
+5. PLAN           playwright-cli: .memory-bank/e2e-specs/*.plan.md ← oficial
 6. GENERATE       playwright-cli: gere os .spec.ts    ← oficial
                   + prefixo de dados e teardown       ← esta skill
 7. POM            refatore; --check-po + spec_lint     ← esta skill

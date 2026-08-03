@@ -8,7 +8,7 @@ guard.py — State 0. Portão de entrada da engine.
 
 Responde a duas perguntas antes de qualquer navegação ou geração de teste:
 
-    1. A combinação modo + oráculo é coerente?
+    1. A combinação modo + fonte de verdade é coerente?
     2. É seguro criar, alterar e apagar dados neste host?
 
 100% determinístico. Sem rede, sem modelo, sem dependências externas.
@@ -17,7 +17,7 @@ Se este script não aprovar, o agente PARA e reporta ao usuário.
 USO
 ---
     uv run guard.py --url https://app.exemplo.com --mode regression
-    uv run guard.py --url ... --mode spec-driven --oracle docs/criterios.md
+    uv run guard.py --url ... --mode spec-driven --truth docs/criterios.md
     uv run guard.py --url ... --mode regression --allow-production \\
                     --allowlist .e2e-engine/production-allowlist.txt
     uv run guard.py --self-test
@@ -56,13 +56,13 @@ PADROES_AMBIENTE: list[tuple[str, str]] = [
 ]
 
 ERROS = {
-    "E001": "modo spec-driven exige --oracle <caminho|texto>. "
+    "E001": "modo spec-driven exige --truth <caminho|texto>. "
             "Use --mode regression se o objetivo é criar rede de regressão.",
     "E002": "host classificado como produção e --allow-production não foi informado.",
     "E003": "host de produção fora da allowlist.",
     "E004": "modo inválido.",
     "E005": "URL inválida ou sem host.",
-    "E006": "arquivo de oráculo informado não existe.",
+    "E006": "arquivo de fonte de verdade informado não existe.",
     "E007": "--allow-production exige --allowlist apontando para um arquivo existente.",
 }
 
@@ -77,7 +77,7 @@ class Decisao:
     environment: str
     mutations_allowed: bool
     scope: str                       # "CRUDL" | "RL" (somente leitura)
-    oracle: str | None = None
+    truth: str | None = None
     errors: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     hitl: list[str] = field(default_factory=list)
@@ -113,7 +113,7 @@ def ler_allowlist(caminho: Path | None) -> set[str]:
 def avaliar(
     url: str,
     mode: str,
-    oracle: str | None = None,
+    truth: str | None = None,
     allow_production: bool = False,
     allowlist_path: Path | None = None,
 ) -> Decisao:
@@ -129,19 +129,19 @@ def avaliar(
     if not host:
         erros.append(erro("E005", f"recebido: {url!r}"))
 
-    # --- oráculo -----------------------------------------------------------
+    # --- fonte de verdade --------------------------------------------------
     if mode == "spec-driven":
-        if not oracle:
+        if not truth:
             erros.append(erro("E001"))
         else:
-            p = Path(oracle)
-            # oráculo pode ser caminho de arquivo OU texto livre
-            parece_caminho = p.suffix != "" or "/" in oracle
+            p = Path(truth)
+            # fonte de verdade pode ser caminho de arquivo OU texto livre
+            parece_caminho = p.suffix != "" or "/" in truth
             if parece_caminho and not p.is_file():
-                erros.append(erro("E006", f"caminho: {oracle}"))
-    elif oracle:
+                erros.append(erro("E006", f"caminho: {truth}"))
+    elif truth:
         avisos.append(
-            "--oracle informado em modo regression será ignorado. "
+            "--truth informado em modo regression será ignorado. "
             "PRODUCT_BUG é inalcançável neste modo."
         )
 
@@ -188,7 +188,7 @@ def avaliar(
         environment=ambiente,
         mutations_allowed=bool(mutations),
         scope="CRUDL" if mutations else "RL",
-        oracle=oracle if mode == "spec-driven" else None,
+        truth=truth if mode == "spec-driven" else None,
         errors=erros,
         warnings=avisos,
         hitl=hitl,
@@ -208,11 +208,11 @@ CASOS = [
      dict(url="https://homolog.empresa.com", mode="regression"), True, "staging", True),
     ("host desconhecido → somente leitura",
      dict(url="https://app.cliente.com", mode="regression"), True, "unknown", False),
-    ("spec-driven sem oráculo → E001",
+    ("spec-driven sem fonte de verdade → E001",
      dict(url="http://localhost:3000", mode="spec-driven"), False, "local", True),
-    ("spec-driven com oráculo em texto",
+    ("spec-driven com fonte de verdade em texto",
      dict(url="http://localhost:3000", mode="spec-driven",
-          oracle="o campo nome é obrigatório"), True, "local", True),
+          truth="o campo nome é obrigatório"), True, "local", True),
     ("modo inválido → E004",
      dict(url="http://localhost:3000", mode="smoke"), False, "local", True),
     ("URL sem host → E005",
@@ -246,11 +246,11 @@ def self_test() -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="State 0 — valida modo, oráculo e segurança de ambiente.")
+        description="State 0 — valida modo, fonte de verdade e segurança de ambiente.")
     ap.add_argument("--url")
     ap.add_argument("--mode", choices=MODOS + ("smoke",),
                     help="regression | spec-driven")
-    ap.add_argument("--oracle", help="caminho de arquivo ou texto do requisito")
+    ap.add_argument("--truth", help="caminho de arquivo ou texto do requisito")
     ap.add_argument("--allow-production", action="store_true")
     ap.add_argument("--allowlist", type=Path,
                     help="arquivo com hosts de produção permitidos, um por linha")
@@ -268,7 +268,7 @@ def main() -> int:
     return avaliar(
         url=args.url,
         mode=args.mode,
-        oracle=args.oracle,
+        truth=args.truth,
         allow_production=args.allow_production,
         allowlist_path=args.allowlist,
     ).emit()
