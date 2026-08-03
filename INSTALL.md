@@ -108,20 +108,36 @@ python3 scripts/spec_lint.py --self-test
 crie testes e2e para https://app-staging.empresa.com/produtos
 ```
 
+ou só a fonte de verdade:
+
+```
+gere a spec / critérios de aceite para https://app-staging.empresa.com/cadastro
+```
+
 A skill dispara pela descrição, roda o `guard.py`, pergunta o modo e delega a
-mecânica ao `playwright-cli`.
+mecânica ao `playwright-cli`. Em `spec-driven`, o orquestrador redige
+`.memory-bank/e2e-specs/<feature>.spec.md` (passos 4b/4c), pede aprovação
+humana e só então deriva o `plan.md`. Pedido só de spec → para após o HITL.
 
 - **`regression`** — sem requisito escrito. Congela o comportamento atual.
   Detecta *mudança*, não *defeito*.
 - **`spec-driven`** — com requisito, critério de aceite ou ticket. Único modo
   que pode afirmar `PRODUCT_BUG`, e só com citação literal da fonte de verdade.
+  Spec em `draft` é rejeitada pelo `guard.py` (`E008`).
+
+Exemplo de `.spec.md` (cadastro + tabela):
+[`examples/cadastro.spec.md`](.claude/skills/codesteer-test-guard/examples/cadastro.spec.md).
+Playbook: `references/spec-generation.md`.
 
 ## Estrutura
 
 ```
 skills/codesteer-test-guard/
-├── SKILL.md                      ← as 6 restrições e o fluxo de 11 passos
+├── SKILL.md                      ← as 6 restrições e o fluxo (inclui 4b/4c)
+├── examples/
+│   └── cadastro.spec.md          ← exemplo de critérios + tabela de valores
 ├── references/
+│   ├── spec-generation.md        ← draft → HITL → approved → plan
 │   ├── healing-policy.md         ← o gate, e o que revoga do oficial
 │   ├── pom-policy.md             ← convenção POM; expect fica no spec
 │   ├── auth-playbook.md          ← autenticar uma vez (storageState)
@@ -129,7 +145,7 @@ skills/codesteer-test-guard/
 │   ├── selector-health.md        ← níveis A–D, bloqueio no D
 │   └── selector-policy.md        ← esvaziado: virou selector-health.md
 └── scripts/
-    ├── guard.py                  ← ambiente e modo (sem dependências)
+    ├── guard.py                  ← ambiente, modo e E008 (draft)
     ├── assertion_guard.py        ← o gate + --check-po (tree-sitter)
     └── spec_lint.py              ← varredura estática da suíte gerada
 

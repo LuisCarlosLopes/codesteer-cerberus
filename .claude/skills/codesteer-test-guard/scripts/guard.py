@@ -64,7 +64,59 @@ ERROS = {
     "E005": "URL inválida ou sem host.",
     "E006": "arquivo de fonte de verdade informado não existe.",
     "E007": "--allow-production exige --allowlist apontando para um arquivo existente.",
+    "E008": "fonte de verdade em draft (ou sem status approved); "
+            "aprove o .spec.md antes de usar --truth em spec-driven.",
 }
+
+# Front matter YAML mínimo (só chave: valor em linha). Sem dependência PyYAML.
+RE_FRONT_MATTER = re.compile(
+    r"\A---\s*\n(.*?)\n---\s*(?:\n|$)",
+    re.DOTALL,
+)
+RE_STATUS = re.compile(r"(?m)^status:\s*(\S+)\s*$")
+
+
+def parece_caminho_truth(truth: str) -> bool:
+    p = Path(truth)
+    return p.suffix != "" or "/" in truth
+
+
+def eh_spec_e2e(caminho: Path) -> bool:
+    """Arquivo sob e2e-specs/ com sufixo .spec.md — contrato do Test Guard."""
+    partes = {p.lower() for p in caminho.parts}
+    return caminho.name.endswith(".spec.md") and "e2e-specs" in partes
+
+
+def ler_status_front_matter(caminho: Path) -> str | None:
+    """Devolve o valor de status: no front matter, ou None se ausente/inválido."""
+    try:
+        texto = caminho.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = RE_FRONT_MATTER.match(texto)
+    if not m:
+        return None
+    sm = RE_STATUS.search(m.group(1))
+    if not sm:
+        return None
+    return sm.group(1).strip().strip("\"'")
+
+
+def validar_truth_arquivo(caminho: Path) -> dict | None:
+    """
+    Para *.spec.md em e2e-specs/: exige status approved (fail-closed).
+    Docs externos sem front matter continuam válidos.
+    Devolve dict de erro ou None se ok.
+    """
+    if not eh_spec_e2e(caminho):
+        return None
+    status = ler_status_front_matter(caminho)
+    if status == "approved":
+        return None
+    extra = f"caminho: {caminho}; status: {status!r}" if status else (
+        f"caminho: {caminho}; status ausente — tratado como draft"
+    )
+    return erro("E008", extra)
 
 
 @dataclass
@@ -135,10 +187,13 @@ def avaliar(
             erros.append(erro("E001"))
         else:
             p = Path(truth)
-            # fonte de verdade pode ser caminho de arquivo OU texto livre
-            parece_caminho = p.suffix != "" or "/" in truth
-            if parece_caminho and not p.is_file():
-                erros.append(erro("E006", f"caminho: {truth}"))
+            if parece_caminho_truth(truth):
+                if not p.is_file():
+                    erros.append(erro("E006", f"caminho: {truth}"))
+                else:
+                    e008 = validar_truth_arquivo(p)
+                    if e008:
+                        erros.append(e008)
     elif truth:
         avisos.append(
             "--truth informado em modo regression será ignorado. "
@@ -223,19 +278,85 @@ CASOS = [
 ]
 
 
+def _escrever_truth_tmp(raiz: Path, rel: str, corpo: str) -> Path:
+    caminho = raiz / rel
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_text(corpo, encoding="utf-8")
+    return caminho
+
+
 def self_test() -> int:
+    import tempfile
+
     falhas = 0
-    print(f"guard — self-test ({len(CASOS)} casos)\n")
-    for nome, kwargs, esperado_ok, esperado_env, esperado_mut in CASOS:
-        d = avaliar(**kwargs)
-        ok = (d.approved == esperado_ok
-              and d.environment == esperado_env
-              and d.mutations_allowed == esperado_mut)
-        falhas += not ok
-        codigos = ",".join(e["code"] for e in d.errors) or "-"
-        print(f"  {'PASS' if ok else 'FALHA':5}  {nome:38} "
-              f"env={d.environment:11} mut={str(d.mutations_allowed):5} "
-              f"scope={d.scope:5} erros={codigos}")
+    casos_dinamicos: list[tuple[str, dict, bool, str, bool, str | None]] = []
+
+    with tempfile.TemporaryDirectory() as tmp:
+        raiz = Path(tmp)
+        draft = _escrever_truth_tmp(
+            raiz,
+            "e2e-specs/cadastro.spec.md",
+            "---\nid: e2e-spec-cadastro\nstatus: draft\nsource: observed\n---\n# draft\n",
+        )
+        approved = _escrever_truth_tmp(
+            raiz,
+            "e2e-specs/produtos.spec.md",
+            "---\nid: e2e-spec-produtos\nstatus: approved\nsource: user-provided\n"
+            "approved_by: user\napproved_at: 2026-08-03T00:00:00Z\n---\n# ok\n",
+        )
+        sem_status = _escrever_truth_tmp(
+            raiz,
+            "e2e-specs/sem-status.spec.md",
+            "---\nid: e2e-spec-x\nsource: observed\n---\n# sem status\n",
+        )
+        legado = _escrever_truth_tmp(
+            raiz,
+            "docs/criterios-aceite.md",
+            "# Critérios\n\nO campo nome é obrigatório.\n",
+        )
+
+        casos_dinamicos = [
+            ("*.spec.md draft → E008",
+             dict(url="http://localhost:3000", mode="spec-driven", truth=str(draft)),
+             False, "local", True, "E008"),
+            ("*.spec.md approved → ok",
+             dict(url="http://localhost:3000", mode="spec-driven", truth=str(approved)),
+             True, "local", True, None),
+            ("*.spec.md sem status → E008",
+             dict(url="http://localhost:3000", mode="spec-driven", truth=str(sem_status)),
+             False, "local", True, "E008"),
+            ("doc externo sem front matter → ok",
+             dict(url="http://localhost:3000", mode="spec-driven", truth=str(legado)),
+             True, "local", True, None),
+        ]
+
+        total = len(CASOS) + len(casos_dinamicos)
+        print(f"guard — self-test ({total} casos)\n")
+
+        for nome, kwargs, esperado_ok, esperado_env, esperado_mut in CASOS:
+            d = avaliar(**kwargs)
+            ok = (d.approved == esperado_ok
+                  and d.environment == esperado_env
+                  and d.mutations_allowed == esperado_mut)
+            falhas += not ok
+            codigos = ",".join(e["code"] for e in d.errors) or "-"
+            print(f"  {'PASS' if ok else 'FALHA':5}  {nome:42} "
+                  f"env={d.environment:11} mut={str(d.mutations_allowed):5} "
+                  f"scope={d.scope:5} erros={codigos}")
+
+        for nome, kwargs, esperado_ok, esperado_env, esperado_mut, codigo in casos_dinamicos:
+            d = avaliar(**kwargs)
+            codigos_lista = [e["code"] for e in d.errors]
+            ok = (d.approved == esperado_ok
+                  and d.environment == esperado_env
+                  and d.mutations_allowed == esperado_mut
+                  and (codigo is None or codigo in codigos_lista))
+            falhas += not ok
+            codigos = ",".join(codigos_lista) or "-"
+            print(f"  {'PASS' if ok else 'FALHA':5}  {nome:42} "
+                  f"env={d.environment:11} mut={str(d.mutations_allowed):5} "
+                  f"scope={d.scope:5} erros={codigos}")
+
     print()
     if falhas:
         print(f"{falhas} caso(s) divergente(s).")

@@ -1,6 +1,6 @@
 ---
 name: codesteer-test-guard
-description: Camada de governança para testes E2E em Playwright — decide o que pode ser testado, contra qual ambiente, e impede que o conserto automático de um teste enfraqueça o que ele prova. Use SEMPRE que o usuário quiser criar, gerar ou manter testes end-to-end, testes de interface, suíte de regressão ou testes CRUDL de uma URL; e SEMPRE que um teste Playwright estiver falhando e for preciso decidir se é bug do produto, deriva do teste ou instabilidade de ambiente. Opera sobre a skill oficial playwright-cli, que executa a mecânica de navegação, geração e execução. Não cobre teste de carga, teste de API isolado nem correção do código da aplicação.
+description: Camada de governança para testes E2E em Playwright — decide o que pode ser testado, contra qual ambiente, e impede que o conserto automático de um teste enfraqueça o que ele prova. Use SEMPRE que o usuário quiser criar, gerar ou manter testes end-to-end, testes de interface, suíte de regressão ou testes CRUDL de uma URL; SEMPRE que quiser gerar spec, critérios de aceite ou fonte de verdade E2E (`.spec.md`) a partir de discovery ou material do usuário; e SEMPRE que um teste Playwright estiver falhando e for preciso decidir se é bug do produto, deriva do teste ou instabilidade de ambiente. Opera sobre a skill oficial playwright-cli, que executa a mecânica de navegação, geração e execução. Não cobre teste de carga, teste de API isolado nem correção do código da aplicação.
 ---
 
 # codesteer-test-guard
@@ -55,10 +55,19 @@ Declare ao usuário, em `regression`:
 > algo **mudou**, não que algo está **errado**. Não é possível afirmar "isto é
 > um bug" quando a expectativa foi extraída do próprio produto.
 
-O `plan.md` do fluxo oficial serve como spec em ambos os modos; grave-o em
-`.memory-bank/e2e-specs/<feature>.plan.md`. Em `spec-driven`, cada cenário deve
-apontar para a fonte externa — requisito, ticket, contrato — não apenas para o
-que você observou navegando.
+Em `spec-driven`, `--truth` deve ser:
+
+- um `.memory-bank/e2e-specs/<feature>.spec.md` com **`status: approved`**, ou
+- um doc externo já aprovado pelo usuário (ticket, `criterios-aceite.md` legado)
+
+Spec gerada só pela UI nasce como **draft**. O `guard.py` rejeita draft com
+`E008` — aprove no passo 4c antes de seguir. Ver
+`references/spec-generation.md`.
+
+O `plan.md` do fluxo oficial serve como plano operacional em ambos os modos;
+grave-o em `.memory-bank/e2e-specs/<feature>.plan.md`. Em `spec-driven`, cada
+cenário do plan deve citar a fonte (`Fonte: <feature>.spec.md#CA-01`) — não
+apenas o que você observou navegando.
 
 ### 3. Seletor ruim bloqueia a geração
 
@@ -97,15 +106,19 @@ Exit 1 → corrija antes de rodar a suíte. O `--check-po` é a checagem focada
 usada durante o healing; o `spec_lint` é a varredura ampla do passo 7.
 
 **Todo `.spec.ts` gerado declara o header `// intent:`**, ao lado dos `// spec:`
-e `// seed:` do fluxo oficial:
+e `// seed:` do fluxo oficial. Em `spec-driven`, declare também `// truth:`
+apontando para o critério citável:
 
 ```ts
+// truth: .memory-bank/e2e-specs/produtos.spec.md#CA-01
 // spec: .memory-bank/e2e-specs/produtos.plan.md
 // intent: produto criado aparece na lista como Ativo
 ```
 
-Uma frase: o que este teste prova. É o valor que o gate congela na restrição 6 —
-sem ele, o healing não tem referência e é bloqueado.
+Em `regression` sem fonte aprovada, omita `// truth:`.
+
+Uma frase no `// intent:`: o que este teste prova. É o valor que o gate congela
+na restrição 6 — sem ele, o healing não tem referência e é bloqueado.
 
 ### 5. Todo dado criado é rastreável e removido
 
@@ -168,7 +181,11 @@ que pode escapar do teardown. Aviso não falha o build — confira e decida.
 2. DISCOVERY      → subagent e2e-discovery            ← delegado
 3. SELETORES      nível A–D vem do subagent; D bloqueia
 4. AUTH           setup project + storageState        ← esta skill
-5. PLAN           playwright-cli: .memory-bank/e2e-specs/*.plan.md ← oficial
+4b. SPEC_DRAFT    .memory-bank/e2e-specs/*.spec.md    ← orquestrador (sem subagent)
+4c. SPEC_APPROVE  HITL; status: approved; re-guarde   ← orquestrador (sem subagent)
+                  se o usuário pediu só a spec → PARE aqui
+5. PLAN           deriva do .spec.md aprovado (ou observação em regression)
+                  → .memory-bank/e2e-specs/*.plan.md  ← oficial + esta skill
 6. GENERATE       playwright-cli: gere os .spec.ts    ← oficial
                   + prefixo de dados e teardown       ← esta skill
 7. POM            refatore; --check-po + spec_lint     ← esta skill
@@ -178,6 +195,21 @@ que pode escapar do teardown. Aviso não falha o build — confira e decida.
                   tocou um PO? rode --check-po de novo
 11. REPORT        summary, mutations.diff, bug_report ← esta skill
 ```
+
+### Spec de critérios (passos 4b e 4c)
+
+**Não delegue.** O orquestrador redige o rascunho e conduz o HITL, seguindo
+`references/spec-generation.md`. Volume baixo (relatório de discovery + material
+do usuário) — não justifica subagent.
+
+1. Grave `.memory-bank/e2e-specs/<feature>.spec.md` com `status: draft`
+2. Mostre o caminho e o resumo; pergunte aprovar / editar / descartar
+3. **Aguarde resposta**
+4. Se aprovado: `status: approved` + `approved_by` + `approved_at`
+5. Rode `guard.py --mode spec-driven --truth <arquivo>` — `E008` se ainda draft
+6. Se o usuário pediu **só** critérios de aceite: **PARE** após 4c
+
+Em `regression` sem pedido de spec, pule 4b/4c e vá ao PLAN.
 
 ### Autenticação (passo 4)
 
@@ -210,7 +242,8 @@ código de MFA.
 
 Passos 2 e 9 são delegados por um motivo só: **contenção de contexto.**
 Snapshot de página e saída de trace são volumosos; o orquestrador precisa da
-conclusão, não do material bruto.
+conclusão, não do material bruto. Passos **4b/4c (spec) não entram nesta
+lista** — ficam no orquestrador.
 
 | Subagent | Passo | Devolve | Permissão |
 | :--- | :---: | :--- | :--- |
@@ -288,7 +321,7 @@ reference `storage-state.md`). As regras de política:
 ```bash
 uv run scripts/assertion_guard.py --self-test   # 19 casos
 uv run scripts/spec_lint.py --self-test         # 10 casos
-uv run scripts/guard.py --self-test             # 10 casos
+uv run scripts/guard.py --self-test             # 14 casos (inclui E008)
 uv run scripts/assertion_guard.py --check-po tests/   # invariante do POM
 npx --no-install playwright-cli --version       # skill oficial disponível?
 ls .claude/agents/e2e-*.md                      # subagents instalados?
@@ -301,6 +334,7 @@ Se `playwright-cli` não estiver instalado: `npm install -g @playwright/cli@late
 
 ## Referências
 
+- `references/spec-generation.md` — critérios `.spec.md`, HITL e derivação do plan
 - `references/healing-policy.md` — o gate, e o que ele revoga do fluxo oficial
 - `references/triage-guide.md` — árvore de classificação de falha
 - `references/auth-playbook.md` — autenticar uma vez; armadilhas de sessão
