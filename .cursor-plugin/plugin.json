@@ -9,7 +9,7 @@
   },
   "homepage": "https://github.com/LuisCarlosLopes/codesteer-test-guard",
   "repository": "https://github.com/LuisCarlosLopes/codesteer-test-guard",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "keywords": ["e2e", "playwright", "governance", "healing", "pom"],
   "skills": "skills/",
   "agents": [

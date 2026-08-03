@@ -309,4 +309,5 @@ lacuna é real e não tem enforcement no fluxo oficial do Playwright.
 
 ## Licença
 
-MIT — veja [LICENSE](LICENSE).
+Proprietária — uso permitido; modificar, redistribuir ou vender exige autorização.
+Veja [LICENSE](LICENSE).
