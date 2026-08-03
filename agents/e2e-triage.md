@@ -35,7 +35,7 @@ Feche a sessão e pare o run em background quando terminar.
 
 ## Como classificar
 
-Leia `references/triage-guide.md` da skill `codesteer-test-guard`. A árvore de
+Leia `references/triage-guide.md` da skill `codesteer-cerberus`. A árvore de
 decisão é fixa — não crie categorias novas.
 
 Antes de qualquer coisa: se o primeiro teste redirecionou para `/login`, a

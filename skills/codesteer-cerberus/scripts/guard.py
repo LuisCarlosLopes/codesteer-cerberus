@@ -82,7 +82,7 @@ def parece_caminho_truth(truth: str) -> bool:
 
 
 def eh_spec_e2e(caminho: Path) -> bool:
-    """Arquivo sob e2e-specs/ com sufixo .spec.md — contrato do Test Guard."""
+    """Arquivo sob e2e-specs/ com sufixo .spec.md — contrato do Cerberus."""
     partes = {p.lower() for p in caminho.parts}
     return caminho.name.endswith(".spec.md") and "e2e-specs" in partes
 

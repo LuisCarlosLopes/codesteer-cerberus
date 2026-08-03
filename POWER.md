@@ -1,18 +1,18 @@
 ---
-name: codesteer-test-guard
-displayName: CodeSteer Test Guard
+name: codesteer-cerberus
+displayName: CodeSteer Cerberus
 description: Camada de governança para testes E2E em Playwright — ambiente, modo, seletores, POM e gate de healing sobre a skill oficial playwright-cli.
 keywords:
   - e2e
   - playwright
   - governance
   - healing
-  - test guard
+  - cerberus
   - POM
 author: CodeSteer Squad
 ---
 
-# CodeSteer Test Guard
+# CodeSteer Cerberus
 
 Governança E2E sobre `playwright-cli`. Não executa browser — decide o que pode
 ser testado e o que o healing não pode tocar.
@@ -32,10 +32,10 @@ Ao ativar este power pela primeira vez:
 3. Rode os self-tests dos gates (na raiz deste repositório / plugin):
 
    ```bash
-   python3 skills/codesteer-test-guard/scripts/guard.py --self-test
+   python3 skills/codesteer-cerberus/scripts/guard.py --self-test
    pip install tree-sitter tree-sitter-typescript
-   python3 skills/codesteer-test-guard/scripts/assertion_guard.py --self-test
-   python3 skills/codesteer-test-guard/scripts/spec_lint.py --self-test
+   python3 skills/codesteer-cerberus/scripts/assertion_guard.py --self-test
+   python3 skills/codesteer-cerberus/scripts/spec_lint.py --self-test
    ```
 
 4. Se algum self-test falhar, **não use o passo de healing** até corrigir o gate.

@@ -1,4 +1,4 @@
-# CodeSteer Test Guard
+# CodeSteer Cerberus
 
 Camada de **governança** sobre a skill oficial `playwright-cli`. Esta skill
 não executa Playwright — ela decide o que pode ser testado, contra qual
@@ -6,7 +6,7 @@ ambiente, e o que o healing não pode tocar.
 
 ## Quando usar
 
-Use a skill `codesteer-test-guard` sempre que o usuário quiser:
+Use a skill `codesteer-cerberus` sempre que o usuário quiser:
 
 - criar, gerar ou manter testes E2E / interface / CRUDL / regressão a partir de uma URL
 - gerar spec ou critérios de aceite (`.spec.md`) a partir de discovery ou material do usuário
@@ -33,11 +33,11 @@ Pré-requisito externo: `@playwright/cli` (skill `playwright-cli`).
 Cloud Agents não leem `~/.cursor`. Para a skill estar disponível no VM:
 
 1. Instale o plugin via Team Marketplace e marque como Required, **ou**
-2. Committe `skills/codesteer-test-guard/` e `agents/e2e-*.md` no repositório de produto.
+2. Committe `skills/codesteer-cerberus/` e `agents/e2e-*.md` no repositório de produto.
 
 Garanta `playwright-cli` / `@playwright/cli` no ambiente Cloud (setup do
 projeto). Rode os self-tests dos gates se alterar a skill:
 
 ```bash
-python3 skills/codesteer-test-guard/scripts/guard.py --self-test
+python3 skills/codesteer-cerberus/scripts/guard.py --self-test
 ```

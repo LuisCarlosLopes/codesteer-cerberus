@@ -1,4 +1,4 @@
-# CodeSteer Test Guard
+# CodeSteer Cerberus
 
 Camada de **governança** para testes E2E construídos com **[Playwright](https://playwright.dev)**.
 
@@ -50,7 +50,7 @@ A **#6** é a razão de a skill existir. Sem ela, o loop de cura automática pod
 
 Spec gerada só pela UI nasce como **draft**. O `guard.py` rejeita draft (`E008`)
 até haver aprovação humana. Playbook:
-[`references/spec-generation.md`](skills/codesteer-test-guard/references/spec-generation.md).
+[`references/spec-generation.md`](skills/codesteer-cerberus/references/spec-generation.md).
 
 ### Fluxo (resumo)
 
@@ -66,7 +66,7 @@ até haver aprovação humana. Playbook:
 8. HEAL        patch → assertion_guard antes/depois → só então aplica
 ```
 
-Detalhe operacional completo: [`skills/codesteer-test-guard/SKILL.md`](skills/codesteer-test-guard/SKILL.md).
+Detalhe operacional completo: [`skills/codesteer-cerberus/SKILL.md`](skills/codesteer-cerberus/SKILL.md).
 
 ### Agents (read-only)
 
@@ -112,7 +112,7 @@ gere a spec / critérios de aceite para https://app-staging.empresa.com/cadastro
 ```
 
 Exemplo de `.spec.md`:
-[`examples/cadastro.spec.md`](skills/codesteer-test-guard/examples/cadastro.spec.md).
+[`examples/cadastro.spec.md`](skills/codesteer-cerberus/examples/cadastro.spec.md).
 
 Artefatos típicos no repositório de produto:
 
@@ -162,21 +162,21 @@ plugin a partir deste repositório git ou de uma pasta local.
 ### Claude Code
 
 ```
-/plugin marketplace add LuisCarlosLopes/codesteer-test-guard
-/plugin install codesteer-test-guard
+/plugin marketplace add LuisCarlosLopes/codesteer-cerberus
+/plugin install codesteer-cerberus
 ```
 
-Pasta local: `/plugin marketplace add /caminho/para/codesteer-test-guard` e
-depois `/plugin install`. Teste: `claude --plugin-dir /caminho/para/codesteer-test-guard`.
+Pasta local: `/plugin marketplace add /caminho/para/codesteer-cerberus` e
+depois `/plugin install`. Teste: `claude --plugin-dir /caminho/para/codesteer-cerberus`.
 
 ### GitHub Copilot CLI
 
 ```bash
-copilot plugin install LuisCarlosLopes/codesteer-test-guard
-# ou: copilot plugin install /caminho/para/codesteer-test-guard
+copilot plugin install LuisCarlosLopes/codesteer-cerberus
+# ou: copilot plugin install /caminho/para/codesteer-cerberus
 ```
 
-Remover: `copilot plugin uninstall codesteer-test-guard`.
+Remover: `copilot plugin uninstall codesteer-cerberus`.
 
 **Copilot Cloud Agent:** habilite em `.github/copilot/settings.json`
 (`enabledPlugins`) no repositório de produto.
@@ -194,7 +194,7 @@ fonte canônica (DX local).
 Cloud Agents não leem `~/.cursor`. Escolha uma:
 
 1. Plugin no Team Marketplace marcado como **Required**, ou
-2. Commit de `skills/codesteer-test-guard/` e `agents/e2e-*.md` no repositório de produto
+2. Commit de `skills/codesteer-cerberus/` e `agents/e2e-*.md` no repositório de produto
 
 Detalhes em [`AGENTS.md`](AGENTS.md).
 
@@ -213,7 +213,7 @@ onboarding (Playwright, `python3`/`uv`, `playwright-cli`, self-tests).
 ## Estrutura do repositório
 
 ```
-skills/codesteer-test-guard/
+skills/codesteer-cerberus/
 ├── SKILL.md                 # as 6 restrições e o fluxo completo
 ├── examples/                # ex.: cadastro.spec.md
 ├── references/
@@ -243,21 +243,21 @@ no manifest do plugin.
 
 ## Ajustar a skill (personalização)
 
-A fonte canônica é **`skills/codesteer-test-guard/`**. Edite ali; os hosts
+A fonte canônica é **`skills/codesteer-cerberus/`**. Edite ali; os hosts
 consomem via plugin/symlinks. Depois de mudar política ou gate, rode os
 self-tests (abaixo) e, se possível, o roteiro de verificação ponta a ponta
 descrito no `SKILL.md`.
 
 | Quero mudar | Onde |
 | :--- | :--- |
-| Texto das 6 restrições / orçamento do loop / passos do fluxo | [`SKILL.md`](skills/codesteer-test-guard/SKILL.md) |
+| Texto das 6 restrições / orçamento do loop / passos do fluxo | [`SKILL.md`](skills/codesteer-cerberus/SKILL.md) |
 | Teto de timeout no healing | `MAX_TIMEOUT_MS` em `scripts/assertion_guard.py` |
 | Hosts de local / staging / prod (regex) | `PADROES_AMBIENTE` em `scripts/guard.py` |
-| Critério dos níveis A–D e bloqueio no D | [`references/selector-health.md`](skills/codesteer-test-guard/references/selector-health.md) |
-| Pastas/nomes de page object; `expect` só no spec | [`references/pom-policy.md`](skills/codesteer-test-guard/references/pom-policy.md) + `PADROES_PO` nos scripts |
+| Critério dos níveis A–D e bloqueio no D | [`references/selector-health.md`](skills/codesteer-cerberus/references/selector-health.md) |
+| Pastas/nomes de page object; `expect` só no spec | [`references/pom-policy.md`](skills/codesteer-cerberus/references/pom-policy.md) + `PADROES_PO` nos scripts |
 | Regras do lint (waitForTimeout, seletores frágeis, …) | `REGRAS_TEXTO` / `RE_SELETOR_FRAGIL` em `scripts/spec_lint.py` |
-| O que o healing pode ou não tocar | [`references/healing-policy.md`](skills/codesteer-test-guard/references/healing-policy.md) |
-| Fluxo draft → approved | [`references/spec-generation.md`](skills/codesteer-test-guard/references/spec-generation.md) |
+| O que o healing pode ou não tocar | [`references/healing-policy.md`](skills/codesteer-cerberus/references/healing-policy.md) |
+| Fluxo draft → approved | [`references/spec-generation.md`](skills/codesteer-cerberus/references/spec-generation.md) |
 | Comportamento de discovery / triage | [`agents/e2e-discovery.md`](agents/e2e-discovery.md), [`agents/e2e-triage.md`](agents/e2e-triage.md) |
 | Config Playwright deste repositório | [`playwright.config.ts`](playwright.config.ts) |
 
@@ -277,7 +277,7 @@ Versionamento: ao publicar comportamento novo, bump `version` em
 ## Self-tests dos gates
 
 ```bash
-cd skills/codesteer-test-guard
+cd skills/codesteer-cerberus
 python3 scripts/guard.py --self-test
 pip install tree-sitter tree-sitter-typescript   # uma vez
 python3 scripts/assertion_guard.py --self-test

@@ -1,12 +1,12 @@
 {
-  "name": "codesteer-test-guard",
+  "name": "codesteer-cerberus",
   "description": "Camada de governança para testes E2E em Playwright — decide o que pode ser testado, contra qual ambiente, e impede que o conserto automático de um teste enfraqueça o que ele prova. Opera sobre a skill oficial playwright-cli.",
   "version": "1.0.0",
   "author": {
     "name": "CodeSteer Squad",
     "email": "squad@codesteer.ai"
   },
-  "homepage": "https://github.com/LuisCarlosLopes/codesteer-test-guard",
+  "homepage": "https://github.com/LuisCarlosLopes/codesteer-cerberus",
   "license": "UNLICENSED",
   "keywords": ["e2e", "playwright", "governance", "healing", "pom"]
 }

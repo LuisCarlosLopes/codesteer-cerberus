@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: skills/codesteer-test-guard
+        working-directory: skills/codesteer-cerberus
     steps:
       - uses: actions/checkout@v4
 

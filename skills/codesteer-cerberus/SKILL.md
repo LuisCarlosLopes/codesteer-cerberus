@@ -1,9 +1,9 @@
 ---
-name: codesteer-test-guard
+name: codesteer-cerberus
 description: Camada de governança para testes E2E em Playwright — decide o que pode ser testado, contra qual ambiente, e impede que o conserto automático de um teste enfraqueça o que ele prova. Use SEMPRE que o usuário quiser criar, gerar ou manter testes end-to-end, testes de interface, suíte de regressão ou testes CRUDL de uma URL; SEMPRE que quiser gerar spec, critérios de aceite ou fonte de verdade E2E (`.spec.md`) a partir de discovery ou material do usuário; e SEMPRE que um teste Playwright estiver falhando e for preciso decidir se é bug do produto, deriva do teste ou instabilidade de ambiente. Opera sobre a skill oficial playwright-cli, que executa a mecânica de navegação, geração e execução. Não cobre teste de carga, teste de API isolado nem correção do código da aplicação.
 ---
 
-# codesteer-test-guard
+# codesteer-cerberus
 
 Esta skill **não executa Playwright**. Ela governa quem executa.
 

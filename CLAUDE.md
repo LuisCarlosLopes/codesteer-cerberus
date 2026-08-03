@@ -1,10 +1,10 @@
-# CodeSteer Test Guard
+# CodeSteer Cerberus
 
 Camada de **governança** sobre a skill oficial `playwright-cli`. Esta skill
 não executa Playwright — ela decide o que pode ser testado, contra qual
 ambiente, e o que o healing não pode tocar.
 
-Leia a skill em `skills/codesteer-test-guard/SKILL.md` e as references
+Leia a skill em `skills/codesteer-cerberus/SKILL.md` e as references
 quando for gerar, curar ou triar testes E2E.
 
 ## Quando usar
@@ -31,8 +31,8 @@ Pré-requisito: skill oficial `playwright-cli` (`npm install -g @playwright/cli@
 Este repositório é um marketplace/plugin Claude Code (`.claude-plugin/`).
 
 ```
-/plugin marketplace add LuisCarlosLopes/codesteer-test-guard
-/plugin install codesteer-test-guard
+/plugin marketplace add LuisCarlosLopes/codesteer-cerberus
+/plugin install codesteer-cerberus
 ```
 
-Ou local: `claude --plugin-dir /caminho/para/codesteer-test-guard`.
+Ou local: `claude --plugin-dir /caminho/para/codesteer-cerberus`.

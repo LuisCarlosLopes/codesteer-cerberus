@@ -14,7 +14,7 @@ e o orquestrador precisa apenas das conclusões.
 ## Você não escreve testes
 
 Sem `Write`, sem `Edit`. Você observa e relata. Quem gera teste é o
-orquestrador, seguindo a skill `codesteer-test-guard`.
+orquestrador, seguindo a skill `codesteer-cerberus`.
 
 ## Ferramentas
 
@@ -36,7 +36,7 @@ Não reimplemente navegação nem geração de locator. Se o app exige setup
 
 ## Classifique a saúde dos seletores — A a D
 
-Leia `references/selector-health.md` da skill `codesteer-test-guard`.
+Leia `references/selector-health.md` da skill `codesteer-cerberus`.
 
 > **Nível D — classes geradas (`css-1x2y3z`), sem nome acessível, alcançável só
 > por seletor estrutural: sinalize BLOQUEIO.**

@@ -10,7 +10,7 @@ approved_at: 2026-08-03T00:00:00Z
 
 # Spec — Cadastro de Cliente (exemplo)
 
-Exemplo mínimo do contrato `.spec.md` do Test Guard. Em uso real, grave em
+Exemplo mínimo do contrato `.spec.md` do Cerberus. Em uso real, grave em
 `.memory-bank/e2e-specs/cadastro.spec.md` e só passe a `--truth` com
 `status: approved`.
 
