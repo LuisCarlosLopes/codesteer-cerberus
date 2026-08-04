@@ -191,6 +191,14 @@ primeiro run:
 Não pule o passo 5. É barato, roda em milissegundos e protege a premissa de
 todo o resto.
 
+## Exceção: modo `smoke`
+
+Em `smoke` o POM é **opcional** — 5 casos rasos não pagam a indireção, e a
+suíte costuma reusar page objects que já existem. O que não muda: `expect()`
+nunca dentro de page object (E8) e `// intent:` obrigatório. A premissa que
+sustenta o gate é essa, não a existência do arquivo `.page.ts`. Ver
+`smoke-policy.md`.
+
 ## Efeito no healing
 
 Sob POM, a maior parte das curas de `TEST_DRIFT` acontece no **page object** —

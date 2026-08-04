@@ -73,10 +73,19 @@ Se D: tabela de elementos que precisam de `data-testid`.
 Para cada operação alcançável: caminho de navegação, campos obrigatórios,
 sinal de sucesso observável, e como desfazer (teardown).
 
+## Caminhos críticos candidatos
+De 3 a 8 fluxos que, quebrados, justificariam rollback. Para cada um: rota,
+sinal de domínio que prova que respondeu (heading, número, primeira linha),
+e se é alcançável sem criar dado.
+
 ## Riscos
 Modais, confirmações, paginação, dados compartilhados entre testes,
 qualquer coisa que torne um teste dependente de outro.
 ```
+
+A seção de caminhos críticos é o insumo do modo `smoke` — que é somente
+leitura. Marque o que **só** é verificável criando registro: isso não cabe em
+smoke, e o orquestrador precisa saber para não tentar.
 
 Máximo ~150 linhas. Se estiver maior, você está copiando snapshot em vez de
 concluir. Feche a sessão do browser antes de responder.

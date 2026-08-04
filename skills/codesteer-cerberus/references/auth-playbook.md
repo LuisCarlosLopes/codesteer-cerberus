@@ -121,6 +121,11 @@ projects: [
 4. Trace captura requisições completas, incluindo headers de sessão. Antes de
    anexar um trace a um relatório que sai da máquina do usuário, **avise que
    pode conter segredos**.
+5. Em `smoke` — sobretudo contra produção — use **conta de serviço dedicada,
+   com permissão mínima de leitura**. O guard bloqueia mutação no código; a
+   conta bloqueia no servidor. Duas barreiras com causas independentes. Se o
+   próprio login é o caminho crítico, um caso smoke precisa logar de verdade;
+   ver `smoke-policy.md`.
 
 ## Três armadilhas
 

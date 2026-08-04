@@ -43,12 +43,13 @@ Ao ativar este power pela primeira vez:
 ## Quando usar
 
 - Gerar ou manter testes E2E / CRUDL / regressão a partir de uma URL
+- Montar suíte de smoke / verificação pós-deploy do caminho crítico
 - Redigir `.spec.md` / critérios de aceite após discovery
 - Triar falha Playwright (produto vs teste vs infra)
 
 ## Fluxo
 
-1. Declare `regression` ou `spec-driven`.
+1. Declare `regression`, `spec-driven` ou `smoke`.
 2. Rode `guard.py` — exit != 0 → pare.
 3. Discovery via agent `e2e-discovery`; triagem via `e2e-triage` (read-only).
 4. Após gerar/curar: `assertion_guard.py` e `spec_lint.py`.
@@ -56,5 +57,7 @@ Ao ativar este power pela primeira vez:
 ## Boas práticas
 
 - Prefira a skill `playwright-cli` para toda ação de browser.
-- Em `regression`, nunca afirme `PRODUCT_BUG`.
+- Em `regression` e em `smoke`, nunca afirme `PRODUCT_BUG`.
+- `smoke` é somente leitura em qualquer ambiente, carrega a tag `@smoke` e roda
+  com `--grep @smoke`. 5xx reproduzível nele é `CRITICAL_PATH_DOWN`, não flake.
 - Healing nunca altera asserção, matcher, `// intent:`, nem introduz `skip`/`fixme`.

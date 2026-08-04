@@ -8,7 +8,7 @@
     {
       "name": "codesteer-cerberus",
       "source": "./",
-      "description": "Camada de governança para testes E2E em Playwright — decide o que pode ser testado, contra qual ambiente, e impede que o conserto automático de um teste enfraqueça o que ele prova."
+      "description": "Camada de governança para testes E2E em Playwright — decide o que pode ser testado, contra qual ambiente, e impede que o conserto automático de um teste enfraqueça o que ele prova. Modos: regression, spec-driven e smoke."
     }
   ]
 }

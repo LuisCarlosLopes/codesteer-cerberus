@@ -1,6 +1,6 @@
 ---
 name: e2e-triage
-description: Classifica falhas de teste Playwright em INFRA_FLAKE, TEST_DRIFT, BEHAVIOR_CHANGED, PRODUCT_BUG ou UNCLASSIFIED, com base em snapshot, console e requests. Use quando um teste E2E falhar e for preciso decidir se o problema é do teste, do ambiente ou do produto, sem carregar trace e logs no contexto principal.
+description: Classifica falhas de teste Playwright em INFRA_FLAKE, TEST_DRIFT, BEHAVIOR_CHANGED, PRODUCT_BUG, CRITICAL_PATH_DOWN (smoke) ou UNCLASSIFIED, com base em snapshot, console e requests. Use quando um teste E2E ou smoke falhar e for preciso decidir se o problema é do teste, do ambiente ou do produto, sem carregar trace e logs no contexto principal.
 tools: Bash, Read, Grep, Glob
 model: inherit
 ---
@@ -47,6 +47,10 @@ causa única.
 - **Modo `regression` → `PRODUCT_BUG` é inalcançável.** Sem fonte de verdade externa, a
   expectativa veio do próprio produto; afirmar defeito seria circular. Use
   `BEHAVIOR_CHANGED`.
+- **Modo `smoke` → use a árvore de smoke do `triage-guide.md`.** `PRODUCT_BUG`
+  também é inalcançável. E 5xx, DNS ou timeout que **reproduz** é
+  `CRITICAL_PATH_DOWN`, não `INFRA_FLAKE`: em smoke, indisponibilidade é o
+  achado, não o ruído. Retry único antes de concluir.
 - **`PRODUCT_BUG` exige citação literal da fonte de verdade.** Sem trecho citável,
   rebaixe para `UNCLASSIFIED`.
 - **`TEST_DRIFT` exige evidência positiva** de que o elemento está na página
@@ -61,7 +65,7 @@ decidir. Uma triagem que sempre conclui é uma triagem que às vezes mente.
 
 ```markdown
 ## <id do teste>
-**Classe:** INFRA_FLAKE | TEST_DRIFT | BEHAVIOR_CHANGED | PRODUCT_BUG | UNCLASSIFIED
+**Classe:** INFRA_FLAKE | TEST_DRIFT | BEHAVIOR_CHANGED | PRODUCT_BUG | CRITICAL_PATH_DOWN | UNCLASSIFIED
 **Confiança:** 0.0–1.0
 **Intent:** <o que o teste provava>
 
@@ -77,6 +81,8 @@ decidir. Uma triagem que sempre conclui é uma triagem que às vezes mente.
 - TEST_DRIFT → qual locator trocar e por qual (use `generate-locator` para
   obter o candidato correto)
 - PRODUCT_BUG → passos de reprodução
+- CRITICAL_PATH_DOWN → qual caminho caiu, desde quando, e se o sintoma é
+  indisponibilidade (5xx/timeout) ou resposta sem o sinal de domínio
 - UNCLASSIFIED → a pergunta objetiva a fazer ao usuário
 ```
 

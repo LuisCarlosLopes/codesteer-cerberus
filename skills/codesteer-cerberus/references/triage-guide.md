@@ -36,6 +36,9 @@ uma cascata de falhas com causa única gera diagnóstico errado em série.
 
 Percorra na ordem. A primeira condição que casar define a classe.
 
+**Modo `smoke` tem árvore própria** — pule para a seção seguinte. Ela existe
+porque aqui a indisponibilidade reproduzível é o **achado**, não o ruído.
+
 ```
 1. Houve erro 5xx, falha de conexão, DNS ou timeout de ambiente?
    └─ SIM → INFRA_FLAKE
@@ -61,6 +64,35 @@ Percorra na ordem. A primeira condição que casar define a classe.
    └─ Sua confiança está abaixo de 0.8             → UNCLASSIFIED
 ```
 
+## Árvore de smoke
+
+Ver `references/smoke-policy.md`. Em `smoke` não há fonte de verdade:
+`PRODUCT_BUG` é inalcançável, como em `regression`.
+
+```
+S1. Erro 5xx, DNS, conexão recusada ou timeout de ambiente?
+    ├─ 1ª ocorrência        → INFRA_FLAKE. Retry ÚNICO, não três.
+    └─ reproduziu idêntico  → CRITICAL_PATH_DOWN
+                              Não é intermitência. É o que o smoke procura.
+
+S2. O elemento existe na página, sob outro seletor?
+    Evidência exigida: a mesma do passo 2 da árvore principal — o snapshot
+    mostra o nó equivalente. Em smoke a barra é mais alta: o alvo era um sinal
+    estável, então drift aqui é exceção.
+    └─ SIM → TEST_DRIFT. Vá ao gate.
+             2ª cura no mesmo caso → pare; a âncora está funda demais.
+
+S3. A aplicação respondeu, mas o sinal de domínio não apareceu
+    (heading, saldo, primeira linha da lista)?
+    └─ SIM → CRITICAL_PATH_DOWN
+             Responder e não entregar é queda igual — só mais silenciosa.
+
+S4. Nada acima → UNCLASSIFIED. Escale.
+```
+
+`CRITICAL_PATH_DOWN` não autoriza tocar no teste. Autoriza avisar, rápido:
+reporte, e recomende rollback ou escalada conforme a janela do deploy.
+
 ## As classes
 
 | Classe | Significado | Pode editar o teste? |
@@ -69,6 +101,7 @@ Percorra na ordem. A primeira condição que casar define a classe.
 | `TEST_DRIFT` | O teste endereça mal; a intenção continua válida | **Sim, sob gate** |
 | `BEHAVIOR_CHANGED` | O comportamento mudou; sem fonte de verdade, não se sabe se é defeito | Não |
 | `PRODUCT_BUG` | O produto contraria o requisito, com citação | Não |
+| `CRITICAL_PATH_DOWN` | **Só em `smoke`.** Caminho crítico indisponível de forma reproduzível | Não — reporte imediatamente |
 | `UNCLASSIFIED` | Não há base para decidir | Não |
 
 ## `PRODUCT_BUG` exige citação literal
@@ -109,4 +142,5 @@ veredito.
 | Chamar bug real de `TEST_DRIFT` | O elemento "sumiu" — mas sumiu porque o produto quebrou | Só use `TEST_DRIFT` se houver evidência positiva do elemento no DOM |
 | `PRODUCT_BUG` em modo `regression` | Impossível por construção | Volte ao passo 3 |
 | `INFRA_FLAKE` para toda falha intermitente | Intermitência também vem de race condition no produto | Três falhas idênticas = determinístico, reclassifique |
+| `INFRA_FLAKE` para 5xx reproduzível em `smoke` | O reflexo de tratar erro de rede como ambiente | Em smoke, 5xx que repete é `CRITICAL_PATH_DOWN` — é o achado, não o ruído |
 | Inferir requisito do comportamento | Ausência de fonte de verdade explícita | `UNCLASSIFIED` e pergunte ao usuário |

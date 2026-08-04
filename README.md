@@ -31,8 +31,8 @@ entra.
 
 | # | Restrição | Enforcement |
 | :---: | :--- | :--- |
-| 1 | Host desconhecido não sofre mutação; produção exige allowlist + confirmação | `scripts/guard.py` (exit code) |
-| 2 | Modo declarado; `PRODUCT_BUG` inalcançável em `regression` | `SKILL.md` + agents |
+| 1 | Host desconhecido não sofre mutação; produção exige allowlist + confirmação; `smoke` é somente leitura em qualquer ambiente | `scripts/guard.py` (exit code) |
+| 2 | Modo declarado; `PRODUCT_BUG` inalcançável em `regression` e em `smoke` | `SKILL.md` + agents |
 | 3 | Seletor nível D bloqueia a geração | `references/selector-health.md` + agent `e2e-discovery` |
 | 4 | Testes em Page Object Model; `expect()` nunca dentro do page object | `assertion_guard.py --check-po` + `spec_lint.py` |
 | 5 | Dado criado tem prefixo `e2e-<runId>-` e teardown | `SKILL.md`; aviso A1 no `spec_lint.py` |
@@ -47,21 +47,32 @@ A **#6** é a razão de a skill existir. Sem ela, o loop de cura automática pod
 | :--- | :--- | :--- |
 | `regression` | Sem requisito escrito | Congela o comportamento atual do produto. Falha futura = *mudou*, não *está errado*. `PRODUCT_BUG` inalcançável |
 | `spec-driven` | Com requisito, ticket ou `.spec.md` **approved** | Único modo que pode afirmar defeito — e só com citação literal da fonte |
+| `smoke` | Verificação pós-deploy do caminho crítico | **Somente leitura por construção** (`scope: RL` em qualquer ambiente, inclusive local). Prova que está *de pé*, não que está *correto*. `PRODUCT_BUG` inalcançável |
 
 Spec gerada só pela UI nasce como **draft**. O `guard.py` rejeita draft (`E008`)
 até haver aprovação humana. Playbook:
 [`references/spec-generation.md`](skills/codesteer-cerberus/references/spec-generation.md).
 
+`smoke` é o modo pensado para rodar **depois do deploy**, inclusive contra
+produção — não há mutação a autorizar. Atenção a um detalhe do guard: ele
+reconhece local/dev/staging por padrão de host e **não infere produção**; sem
+`--allow-production` o alvo cai como `unknown`. Em `smoke`, host `unknown` gera
+`hitl` (pergunte se é produção) em vez de só um aviso. Orçamento (12 casos, 30s
+por caso, 5 min de suíte, 1 retry), escolha
+do caminho crítico, tag `@smoke` e a árvore de triagem própria estão em
+[`references/smoke-policy.md`](skills/codesteer-cerberus/references/smoke-policy.md).
+
 ### Fluxo (resumo)
 
 ```
 0. GUARD       scripts/guard.py          → ambiente + modo + truth
-1. MODO        declare regression|spec-driven
+1. MODO        declare regression|spec-driven|smoke
 2. DISCOVERY   agent e2e-discovery       → rotas, auth, saúde A–D
 3. SPEC/PLAN   (spec-driven: draft → HITL → approved → plan)
+               (smoke: pula a spec; o plan é a lista de caminhos críticos)
 4. GENERATE    playwright-cli + refactor POM + // intent:
 5. LINT        assertion_guard --check-po + spec_lint
-6. RUN         npx playwright test
+6. RUN         npx playwright test       (smoke: --grep @smoke)
 7. TRIAGE      agent e2e-triage          → classificação (read-only)
 8. HEAL        patch → assertion_guard antes/depois → só então aplica
 ```
@@ -73,7 +84,7 @@ Detalhe operacional completo: [`skills/codesteer-cerberus/SKILL.md`](skills/code
 | Agent | Papel |
 | :--- | :--- |
 | `e2e-discovery` | Mapeia a URL (rotas, CRUDL, auth, nível A–D de seletor) sem encher o contexto com snapshot bruto do Playwright |
-| `e2e-triage` | Classifica falha de teste (`INFRA_FLAKE`, `TEST_DRIFT`, `BEHAVIOR_CHANGED`, `PRODUCT_BUG`, `UNCLASSIFIED`). **Não edita** o teste que julga |
+| `e2e-triage` | Classifica falha de teste (`INFRA_FLAKE`, `TEST_DRIFT`, `BEHAVIOR_CHANGED`, `PRODUCT_BUG`, `CRITICAL_PATH_DOWN` em smoke, `UNCLASSIFIED`). **Não edita** o teste que julga |
 
 Ambos são read-only de propósito: quem descobre ou classifica não pode editar
 o teste, o que remove o incentivo de forçar uma classificação mais confortável.
@@ -89,7 +100,9 @@ o teste, o que remove o incentivo de forçar uma classificação mais confortáv
 | E4 | Falta `// intent:` |
 | E5–E6 | `.only()` / `.skip()` / `.fixme()` |
 | E7–E8 | Spec sem asserção; `expect()` dentro de page object |
-| A1 | Dado em `.fill()` sem prefixo `e2e-` (aviso) |
+| E9 | Teste smoke sem a tag `@smoke` — `--grep @smoke` não o executaria |
+| E10 | Asserção tautológica (`expect(page).toBeTruthy()`, `body` visível) |
+| A1–A3 | Avisos: dado sem prefixo `e2e-`; suíte smoke acima de 12 casos; ação mutante em smoke |
 
 `assertion_guard.py` (gate de healing): compara a versão antes/depois de um
 patch e rejeita remoção ou afrouxamento de asserção, mudança do header
@@ -109,6 +122,12 @@ Só a fonte de verdade (para no HITL, sem gerar teste ainda):
 
 ```
 gere a spec / critérios de aceite para https://app-staging.empresa.com/cadastro
+```
+
+Smoke pós-deploy (somente leitura, roda com `--grep @smoke`):
+
+```
+crie a suíte de smoke para https://app.empresa.com
 ```
 
 Exemplo de `.spec.md`:
@@ -218,6 +237,7 @@ skills/codesteer-cerberus/
 ├── examples/                # ex.: cadastro.spec.md
 ├── references/
 │   ├── spec-generation.md   # draft → HITL → approved → plan
+│   ├── smoke-policy.md      # caminho crítico, orçamento, tag @smoke
 │   ├── healing-policy.md    # o que o gate aprova / rejeita
 │   ├── pom-policy.md        # POM; expect fica no .spec.ts
 │   ├── selector-health.md   # níveis A–D de seletor
@@ -256,6 +276,8 @@ descrito no `SKILL.md`.
 | Critério dos níveis A–D e bloqueio no D | [`references/selector-health.md`](skills/codesteer-cerberus/references/selector-health.md) |
 | Pastas/nomes de page object; `expect` só no spec | [`references/pom-policy.md`](skills/codesteer-cerberus/references/pom-policy.md) + `PADROES_PO` nos scripts |
 | Regras do lint (waitForTimeout, seletores frágeis, …) | `REGRAS_TEXTO` / `RE_SELETOR_FRAGIL` em `scripts/spec_lint.py` |
+| Política de smoke (caminho crítico, tag, produção) | [`references/smoke-policy.md`](skills/codesteer-cerberus/references/smoke-policy.md) |
+| Teto de casos da suíte smoke (aviso A2) | `LIMITE_CASOS_SMOKE` em `scripts/spec_lint.py` |
 | O que o healing pode ou não tocar | [`references/healing-policy.md`](skills/codesteer-cerberus/references/healing-policy.md) |
 | Fluxo draft → approved | [`references/spec-generation.md`](skills/codesteer-cerberus/references/spec-generation.md) |
 | Comportamento de discovery / triage | [`agents/e2e-discovery.md`](agents/e2e-discovery.md), [`agents/e2e-triage.md`](agents/e2e-triage.md) |

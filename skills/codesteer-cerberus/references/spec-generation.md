@@ -15,6 +15,7 @@
 | Usuário pediu “gerar spec / critérios de aceite” (com ou sem testes) | Execute 4b → HITL; se pediu só o doc, **pare após 4c** |
 | Já existe `.spec.md` com `status: approved` | Pule 4b/4c; use como `--truth` |
 | Modo `regression` e usuário não pediu spec | Pule; vá ao PLAN |
+| Modo `smoke` | Não se aplica — smoke não afirma requisito. Ver `smoke-policy.md` |
 
 ## Entradas
 
