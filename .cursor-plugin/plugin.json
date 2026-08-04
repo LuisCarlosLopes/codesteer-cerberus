@@ -1,8 +1,8 @@
 {
   "name": "codesteer-cerberus",
   "displayName": "CodeSteer Cerberus",
-  "description": "Camada de governança para testes E2E em Playwright — decide o que pode ser testado, contra qual ambiente, e impede que o conserto automático de um teste enfraqueça o que ele prova. Opera sobre a skill oficial playwright-cli.",
-  "version": "1.0.0",
+  "description": "Camada de governança para testes E2E em Playwright — decide o que pode ser testado, contra qual ambiente, e impede que o conserto automático de um teste enfraqueça o que ele prova. Opera sobre a skill oficial playwright-cli. Modos: regression, spec-driven e smoke (somente leitura, pós-deploy).",
+  "version": "1.1.0",
   "author": {
     "name": "CodeSteer Squad",
     "email": "squad@codesteer.ai"
@@ -10,7 +10,7 @@
   "homepage": "https://github.com/LuisCarlosLopes/codesteer-cerberus",
   "repository": "https://github.com/LuisCarlosLopes/codesteer-cerberus",
   "license": "UNLICENSED",
-  "keywords": ["e2e", "playwright", "governance", "healing", "pom"],
+  "keywords": ["e2e", "playwright", "governance", "healing", "pom", "smoke"],
   "skills": "skills/",
   "agents": [
     "agents/e2e-discovery.md",

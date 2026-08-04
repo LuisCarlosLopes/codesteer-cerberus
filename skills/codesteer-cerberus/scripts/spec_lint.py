@@ -21,9 +21,13 @@ ERRO (exit 1) — decidível estaticamente, sem falso positivo esperado:
   E6  .skip() / .fixme()        dívida silenciosa; ver healing-policy.md
   E7  spec sem asserção         um teste que não prova nada passa sempre
   E8  expect() em page object   cega o gate; ver pom-policy.md
+  E9  smoke sem a tag @smoke    `--grep @smoke` não o executa; some do CI calado
+  E10 asserção tautológica      `expect(page).toBeTruthy()` e afins não provam nada
 
 AVISO (não falha) — heurístico, pode ter falso positivo:
   A1  dado literal sem prefixo `e2e-` em .fill()
+  A2  suíte smoke acima do orçamento de casos (ver smoke-policy.md)
+  A3  ação aparentemente mutante em teste smoke (smoke é somente leitura)
 
 USO
 ---
@@ -64,6 +68,43 @@ IGNORAR = {"node_modules", ".git", "dist", "build", ".e2e-engine"}
 RE_INTENT = re.compile(r"^\s*//\s*intent:\s*(.+?)\s*$", re.M | re.I)
 RE_FILL = re.compile(r"\.fill\(\s*['\"]([^'\"]+)['\"]")
 
+# --- smoke -----------------------------------------------------------------
+# Um teste smoke é reconhecido pelo caminho: tests/smoke/** ou *.smoke.spec.ts.
+# Ver references/smoke-policy.md.
+LIMITE_CASOS_SMOKE = 12
+
+RE_CASO_TESTE = re.compile(r"(?m)^\s*test\s*\(")
+
+# A tag precisa estar no título ou na opção `tag:` — em comentário não serve,
+# porque é `--grep @smoke` que decide o que roda no CI.
+RE_TAG_SMOKE = re.compile(
+    r"(?m)^.*(?:\btest\s*\(|\btest\.describe\s*\(|\btag\s*:).*@smoke")
+
+# Asserções que passam independentemente do estado do produto. É o modo de
+# falha clássico do smoke: "a página carregou" não prova caminho crítico.
+RE_ASSERCAO_VAZIA = re.compile(
+    r"""
+    expect\s*\(\s*(?:true|1|page)\s*\)\s*\.\s*(?:toBeTruthy|toBeDefined)\b
+  | expect\s*\(\s*true\s*\)\s*\.\s*toBe\s*\(\s*true\s*\)
+  | expect\s*\(\s*page\s*\)\s*\.\s*not\s*\.\s*toBeNull\b
+  | expect\s*\(\s*page\.locator\(\s*['"](?:body|html)['"]\s*\)\s*\)
+      \s*\.\s*(?:toBeVisible|toBeAttached)\b
+    """,
+    re.X,
+)
+
+# Heurística: verbo de mutação no locator, ou preenchimento de formulário.
+RE_ACAO_MUTANTE = re.compile(
+    r"""(?ix)
+    \.fill\s*\(
+  | \.setInputFiles\s*\(
+  | (?:getByRole|getByText|getByTestId|getByLabel|getByTitle)\s*\(
+    [^)]*?\b(?: salvar | save | criar | create | cadastrar | novo | nova | new
+              | excluir | deletar | delete | remover | remove | apagar
+              | confirmar | confirm | enviar | submit | publicar | publish )\b
+    """,
+)
+
 # Classes geradas por CSS-in-JS e cadeias estruturais de DOM.
 RE_SELETOR_FRAGIL = re.compile(
     r"""
@@ -90,8 +131,32 @@ MENSAGENS = {
     "E6": "`skip`/`fixme` é dívida silenciosa — ver references/healing-policy.md",
     "E7": "nenhuma asserção no arquivo — este teste passa sempre",
     "E8": "asserção dentro de page object cega o gate — mova para o `.spec.ts`",
+    "E9": "teste smoke sem a tag `@smoke` — `--grep @smoke` não vai executá-lo",
+    "E10": "asserção tautológica — passa com o produto quebrado; prove um sinal real",
     "A1": "dado literal sem prefixo `e2e-` — pode não ser rastreável no teardown",
+    "A2": f"suíte smoke acima de {LIMITE_CASOS_SMOKE} casos — deixou de ser smoke",
+    "A3": "ação aparentemente mutante em smoke — smoke é somente leitura (scope RL)",
 }
+
+
+def eh_smoke_por_caminho(caminho: Path) -> bool:
+    """tests/smoke/**/*.spec.ts ou *.smoke.spec.ts — ver smoke-policy.md."""
+    return "smoke" in {p.lower() for p in caminho.parts[:-1]} or \
+        caminho.name.lower().endswith(".smoke.spec.ts")
+
+
+def eh_smoke(caminho: Path, texto: str | None = None) -> bool:
+    """
+    Caminho **ou** tag. Um arquivo marcado `@smoke` é smoke onde quer que
+    esteja: é a tag que decide o que o CI executa, então é ela que decide
+    quais regras se aplicam. O caminho continua valendo para pegar o arquivo
+    que está na pasta certa e esqueceu a tag (E9).
+    """
+    if eh_smoke_por_caminho(caminho):
+        return True
+    if texto is None:
+        texto = caminho.read_text(encoding="utf-8")
+    return bool(RE_TAG_SMOKE.search(texto))
 
 
 @dataclass
@@ -148,6 +213,18 @@ def analisar_spec(caminho: Path) -> list[Achado]:
     if not tem_assercao(fonte):
         add("E7", "ERRO", 1, "(arquivo inteiro)")
 
+    for m in RE_ASSERCAO_VAZIA.finditer(texto):
+        ln = linha_de(texto, m.start())
+        add("E10", "ERRO", ln, texto.splitlines()[ln - 1])
+
+    tem_tag = bool(RE_TAG_SMOKE.search(texto))
+    if eh_smoke_por_caminho(caminho) or tem_tag:
+        if not tem_tag:
+            add("E9", "ERRO", 1, "(nenhum test/describe com @smoke)")
+        for m in RE_ACAO_MUTANTE.finditer(texto):
+            ln = linha_de(texto, m.start())
+            add("A3", "AVISO", ln, texto.splitlines()[ln - 1])
+
     for m in RE_FILL.finditer(texto):
         valor = m.group(1)
         # Ignora o que claramente não é dado persistido.
@@ -183,6 +260,20 @@ def analisar_po(caminho: Path) -> list[Achado]:
     return out
 
 
+def orcamento_smoke(specs: list[Path]) -> list[Achado]:
+    """Suíte smoke longa deixa de gatear deploy: ninguém espera por ela."""
+    smokes = [p for p in specs if eh_smoke(p)]
+    if not smokes:
+        return []
+    casos = sum(len(RE_CASO_TESTE.findall(p.read_text(encoding="utf-8")))
+                for p in smokes)
+    if casos <= LIMITE_CASOS_SMOKE:
+        return []
+    return [Achado("A2", "AVISO", str(smokes[0]), 1,
+                   f"{casos} casos smoke em {len(smokes)} arquivo(s)",
+                   MENSAGENS["A2"])]
+
+
 def lint(raiz: Path) -> tuple[list[Achado], int, int]:
     specs = coletar(raiz, PADROES_SPEC)
     pos = coletar(raiz, PADROES_PO)
@@ -191,6 +282,7 @@ def lint(raiz: Path) -> tuple[list[Achado], int, int]:
         achados += analisar_spec(s)
     for p in pos:
         achados += analisar_po(p)
+    achados += orcamento_smoke(specs)
     return achados, len(specs), len(pos)
 
 
@@ -259,13 +351,43 @@ CASOS_LINT = [
      ["E7"]),
     ("dado sem prefixo", SPEC_LIMPO.replace("'e2e-run1-teclado')", "'teclado')"),
      ["A1"]),
+    ("asserção tautológica", SPEC_LIMPO.replace(
+        "await expect(produtosPage.linhaDe('e2e-run1-teclado')).toBeVisible();",
+        "await expect(page).toBeTruthy();"), ["E10"]),
+    # Fora de tests/smoke/, mas com a tag: as regras de smoke valem igual —
+    # é a tag que decide o que o CI executa.
+    ("smoke por tag, fora da pasta", SPEC_LIMPO.replace(
+        "test('cria produto'", "test('lista produtos @smoke'"), ["A3"]),
+]
+
+SMOKE_LIMPO = """// spec: .memory-bank/e2e-specs/smoke.plan.md
+// intent: dashboard responde autenticado depois do deploy
+import { test, expect } from '../fixtures';
+test('dashboard carrega autenticado', { tag: ['@smoke'] }, async ({ page }) => {
+  await page.goto('/dashboard');
+  await expect(page.getByRole('heading', { name: 'Resumo' })).toBeVisible();
+});
+"""
+
+CASOS_SMOKE = [
+    ("smoke limpo", SMOKE_LIMPO, []),
+    ("smoke sem tag @smoke", SMOKE_LIMPO.replace("{ tag: ['@smoke'] }, ", ""),
+     ["E9"]),
+    ("smoke tautológico", SMOKE_LIMPO.replace(
+        "page.getByRole('heading', { name: 'Resumo' })",
+        "page.locator('body')"), ["E10"]),
+    ("smoke com ação mutante", SMOKE_LIMPO.replace(
+        "  await page.goto('/dashboard');",
+        "  await page.goto('/dashboard');\n"
+        "  await page.getByRole('button', { name: 'Salvar' }).click();"), ["A3"]),
 ]
 
 
 def self_test() -> int:
     import tempfile
     falhas = 0
-    print(f"spec_lint — self-test ({len(CASOS_LINT)} casos)\n")
+    total = len(CASOS_LINT) + len(CASOS_SMOKE) + 1
+    print(f"spec_lint — self-test ({total} casos)\n")
     with tempfile.TemporaryDirectory() as td:
         for nome, conteudo, esperados in CASOS_LINT:
             arq = Path(td) / "t.spec.ts"
@@ -275,6 +397,31 @@ def self_test() -> int:
             falhas += not ok
             print(f"  {'PASS' if ok else 'FALHA':5}  {nome:22} "
                   f"esperado={esperados or ['-']} obtido={codigos or ['-']}")
+
+        # Smoke: o reconhecimento vem do caminho (tests/smoke/**).
+        pasta_smoke = Path(td) / "smoke"
+        pasta_smoke.mkdir()
+        for nome, conteudo, esperados in CASOS_SMOKE:
+            arq = pasta_smoke / "t.spec.ts"
+            arq.write_text(conteudo, encoding="utf-8")
+            codigos = sorted({a.codigo for a in analisar_spec(arq)})
+            ok = codigos == sorted(esperados)
+            falhas += not ok
+            print(f"  {'PASS' if ok else 'FALHA':5}  {nome:22} "
+                  f"esperado={esperados or ['-']} obtido={codigos or ['-']}")
+
+        # A2 é de suíte, não de arquivo: só aparece somando os casos.
+        excesso = SMOKE_LIMPO + "\n".join(
+            f"test('caso {i}', {{ tag: ['@smoke'] }}, async ({{ page }}) => {{\n"
+            f"  await expect(page.getByRole('heading')).toBeVisible();\n}});"
+            for i in range(LIMITE_CASOS_SMOKE + 1)
+        )
+        (pasta_smoke / "t.spec.ts").write_text(excesso, encoding="utf-8")
+        codigos = sorted({a.codigo for a in orcamento_smoke([pasta_smoke / "t.spec.ts"])})
+        ok = codigos == ["A2"]
+        falhas += not ok
+        print(f"  {'PASS' if ok else 'FALHA':5}  {'orçamento smoke (A2)':22} "
+              f"esperado=['A2'] obtido={codigos or ['-']}")
     print()
     if falhas:
         print(f"{falhas} caso(s) divergente(s).")

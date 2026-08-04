@@ -18,6 +18,7 @@ USO
 ---
     uv run guard.py --url https://app.exemplo.com --mode regression
     uv run guard.py --url ... --mode spec-driven --truth docs/criterios.md
+    uv run guard.py --url ... --mode smoke
     uv run guard.py --url ... --mode regression --allow-production \\
                     --allowlist .e2e-engine/production-allowlist.txt
     uv run guard.py --self-test
@@ -45,7 +46,11 @@ from urllib.parse import urlparse
 
 APROVADO, BLOQUEADO, ERRO_DE_USO = 0, 1, 3
 
-MODOS = ("regression", "spec-driven")
+MODOS = ("regression", "spec-driven", "smoke")
+
+# smoke é somente leitura por construção: é o que torna seguro apontá-lo
+# para produção depois de um deploy. Ver references/smoke-policy.md.
+MODOS_SEM_MUTACAO = ("smoke",)
 
 # Ordem importa: o primeiro padrão que casar define a classificação.
 PADROES_AMBIENTE: list[tuple[str, str]] = [
@@ -196,8 +201,16 @@ def avaliar(
                         erros.append(e008)
     elif truth:
         avisos.append(
-            "--truth informado em modo regression será ignorado. "
+            f"--truth informado em modo {mode} será ignorado. "
             "PRODUCT_BUG é inalcançável neste modo."
+        )
+
+    sem_mutacao = mode in MODOS_SEM_MUTACAO
+    if sem_mutacao:
+        avisos.append(
+            "modo smoke: mutação desabilitada por construção — a suíte fica em "
+            "List e Read mesmo em ambiente que permitiria CRUDL. Se o caminho "
+            "só é comprovável criando registro, não é smoke; use regression."
         )
 
     # --- ambiente ----------------------------------------------------------
@@ -212,22 +225,40 @@ def avaliar(
         if not allowlist_path or not allowlist_path.is_file():
             erros.append(erro("E007", f"caminho: {allowlist_path}"))
         elif host in permitidos:
-            ambiente = "production"
-            hitl.append(
-                f"CONFIRME COM O USUÁRIO antes de prosseguir: testes destrutivos "
-                f"serão executados contra PRODUÇÃO ({host})."
-            )
+            if sem_mutacao:
+                hitl.append(
+                    f"CONFIRME COM O USUÁRIO antes de prosseguir: smoke somente "
+                    f"leitura contra PRODUÇÃO ({host}). Não há mutação; confirme "
+                    f"a janela (pós-deploy) e a conta de serviço usada."
+                )
+            else:
+                hitl.append(
+                    f"CONFIRME COM O USUÁRIO antes de prosseguir: testes "
+                    f"destrutivos serão executados contra PRODUÇÃO ({host})."
+                )
         else:
-            ambiente = "production"
             erros.append(erro("E003", f"host: {host}"))
     elif ambiente == "unknown" and host:
         avisos.append(
             f"host {host!r} não reconhecido como local/dev/staging. "
             "Mutações bloqueadas; suíte limitada a List e Read."
         )
+        if sem_mutacao:
+            # O guard não adivinha produção: sem --allow-production, um host de
+            # produção cai aqui como "unknown". Em smoke esse é o caso comum —
+            # é o modo feito para rodar pós-deploy. Perguntar é o que impede um
+            # alvo de produção de entrar sem allowlist e sem janela combinada.
+            hitl.append(
+                f"CONFIRME COM O USUÁRIO: {host!r} não foi classificado como "
+                f"local/dev/staging, e o guard não infere produção. Se este é o "
+                f"ambiente de produção, pare e rode de novo com "
+                f"--allow-production --allowlist <arquivo>, para haver allowlist "
+                f"revisada e janela combinada."
+            )
 
-    mutations = ambiente in ("local", "dev", "staging") or (
-        ambiente == "production" and allow_production and host in permitidos
+    mutations = (not sem_mutacao) and (
+        ambiente in ("local", "dev", "staging")
+        or (ambiente == "production" and allow_production and host in permitidos)
     )
 
     if ambiente == "production" and not allow_production:
@@ -269,11 +300,21 @@ CASOS = [
      dict(url="http://localhost:3000", mode="spec-driven",
           truth="o campo nome é obrigatório"), True, "local", True),
     ("modo inválido → E004",
-     dict(url="http://localhost:3000", mode="smoke"), False, "local", True),
+     dict(url="http://localhost:3000", mode="exploratory"), False, "local", True),
     ("URL sem host → E005",
      dict(url="nao-e-url", mode="regression"), False, "unknown", False),
     ("produção sem allowlist → E007",
      dict(url="https://app.empresa.com", mode="regression",
+          allow_production=True), False, "production", False),
+    # smoke — somente leitura em qualquer ambiente
+    ("smoke + local → RL (não CRUDL)",
+     dict(url="http://localhost:3000", mode="smoke"), True, "local", False),
+    ("smoke + staging → RL",
+     dict(url="https://app-stg.empresa.com", mode="smoke"), True, "staging", False),
+    ("smoke + host desconhecido → RL",
+     dict(url="https://app.cliente.com", mode="smoke"), True, "unknown", False),
+    ("smoke + produção sem allowlist → E007",
+     dict(url="https://app.empresa.com", mode="smoke",
           allow_production=True), False, "production", False),
 ]
 
@@ -314,6 +355,11 @@ def self_test() -> int:
             "docs/criterios-aceite.md",
             "# Critérios\n\nO campo nome é obrigatório.\n",
         )
+        allowlist = _escrever_truth_tmp(
+            raiz,
+            "e2e-engine/production-allowlist.txt",
+            "# hosts de produção liberados\napp.empresa.com\n",
+        )
 
         casos_dinamicos = [
             ("*.spec.md draft → E008",
@@ -328,9 +374,17 @@ def self_test() -> int:
             ("doc externo sem front matter → ok",
              dict(url="http://localhost:3000", mode="spec-driven", truth=str(legado)),
              True, "local", True, None),
+            ("smoke em produção na allowlist → RL + HITL",
+             dict(url="https://app.empresa.com", mode="smoke",
+                  allow_production=True, allowlist_path=allowlist),
+             True, "production", False, None),
+            ("regression em produção na allowlist → CRUDL + HITL",
+             dict(url="https://app.empresa.com", mode="regression",
+                  allow_production=True, allowlist_path=allowlist),
+             True, "production", True, None),
         ]
 
-        total = len(CASOS) + len(casos_dinamicos)
+        total = len(CASOS) + len(casos_dinamicos) + 1   # +1: smoke/unknown → HITL
         print(f"guard — self-test ({total} casos)\n")
 
         for nome, kwargs, esperado_ok, esperado_env, esperado_mut in CASOS:
@@ -350,12 +404,25 @@ def self_test() -> int:
             ok = (d.approved == esperado_ok
                   and d.environment == esperado_env
                   and d.mutations_allowed == esperado_mut
-                  and (codigo is None or codigo in codigos_lista))
+                  and (codigo is None or codigo in codigos_lista)
+                  # aprovar produção sem registrar HITL seria falha de barreira
+                  and (esperado_env != "production" or not d.approved or bool(d.hitl)))
             falhas += not ok
             codigos = ",".join(codigos_lista) or "-"
             print(f"  {'PASS' if ok else 'FALHA':5}  {nome:42} "
                   f"env={d.environment:11} mut={str(d.mutations_allowed):5} "
                   f"scope={d.scope:5} erros={codigos}")
+
+        # Propriedade à parte: smoke em host não classificado tem de PERGUNTAR.
+        # Sem --allow-production o guard não sabe que é produção, e smoke é
+        # justamente o modo apontado para lá. Aprovar calado seria a brecha.
+        d = avaliar(url="https://app.cliente.com", mode="smoke")
+        ok = d.approved and d.scope == "RL" and bool(d.hitl)
+        falhas += not ok
+        print(f"  {'PASS' if ok else 'FALHA':5}  "
+              f"{'smoke + host unknown → HITL':42} "
+              f"env={d.environment:11} mut={str(d.mutations_allowed):5} "
+              f"scope={d.scope:5} hitl={len(d.hitl)}")
 
     print()
     if falhas:
@@ -369,8 +436,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description="State 0 — valida modo, fonte de verdade e segurança de ambiente.")
     ap.add_argument("--url")
-    ap.add_argument("--mode", choices=MODOS + ("smoke",),
-                    help="regression | spec-driven")
+    # Sem `choices`: um modo inválido deve sair como E004 do próprio guard
+    # (exit 1, JSON com a mensagem certa), não como erro de argparse.
+    ap.add_argument("--mode", help="regression | spec-driven | smoke")
     ap.add_argument("--truth", help="caminho de arquivo ou texto do requisito")
     ap.add_argument("--allow-production", action="store_true")
     ap.add_argument("--allowlist", type=Path,

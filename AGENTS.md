@@ -9,6 +9,7 @@ ambiente, e o que o healing não pode tocar.
 Use a skill `codesteer-cerberus` sempre que o usuário quiser:
 
 - criar, gerar ou manter testes E2E / interface / CRUDL / regressão a partir de uma URL
+- montar suíte de smoke / verificação pós-deploy do caminho crítico
 - gerar spec ou critérios de aceite (`.spec.md`) a partir de discovery ou material do usuário
 - triar falha de teste Playwright (bug do produto vs deriva do teste vs infra)
 
@@ -16,10 +17,11 @@ Não use para teste de carga, API isolada ou correção do código da aplicaçã
 
 ## Fluxo obrigatório
 
-1. Declare o modo: `regression` ou `spec-driven` (pergunte se o usuário não disse).
+1. Declare o modo: `regression`, `spec-driven` ou `smoke` (pergunte se o usuário não disse).
 2. Rode `guard.py` antes de mutar qualquer ambiente. Exit != 0 → pare.
 3. Em `spec-driven`, só afirme `PRODUCT_BUG` com citação literal da fonte aprovada.
-4. Em `regression`, `PRODUCT_BUG` é inalcançável.
+4. Em `regression` e em `smoke`, `PRODUCT_BUG` é inalcançável. `smoke` é somente
+   leitura em qualquer ambiente e roda com `--grep @smoke`.
 5. Após gerar ou curar: `assertion_guard.py` e `spec_lint.py` — exit != 0 bloqueia.
 6. Delegue discovery ao agent `e2e-discovery` e triagem ao `e2e-triage` (read-only).
 

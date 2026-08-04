@@ -1,6 +1,6 @@
 ---
 name: codesteer-cerberus
-description: Camada de governança para testes E2E em Playwright — decide o que pode ser testado, contra qual ambiente, e impede que o conserto automático de um teste enfraqueça o que ele prova. Use SEMPRE que o usuário quiser criar, gerar ou manter testes end-to-end, testes de interface, suíte de regressão ou testes CRUDL de uma URL; SEMPRE que quiser gerar spec, critérios de aceite ou fonte de verdade E2E (`.spec.md`) a partir de discovery ou material do usuário; e SEMPRE que um teste Playwright estiver falhando e for preciso decidir se é bug do produto, deriva do teste ou instabilidade de ambiente. Opera sobre a skill oficial playwright-cli, que executa a mecânica de navegação, geração e execução. Não cobre teste de carga, teste de API isolado nem correção do código da aplicação.
+description: Camada de governança para testes E2E em Playwright — decide o que pode ser testado, contra qual ambiente, e impede que o conserto automático de um teste enfraqueça o que ele prova. Use SEMPRE que o usuário quiser criar, gerar ou manter testes end-to-end, testes de interface, suíte de regressão ou testes CRUDL de uma URL; SEMPRE que quiser suíte de smoke, smoke test, verificação pós-deploy ou health check de caminho crítico (inclusive contra produção); SEMPRE que quiser gerar spec, critérios de aceite ou fonte de verdade E2E (`.spec.md`) a partir de discovery ou material do usuário; e SEMPRE que um teste Playwright estiver falhando e for preciso decidir se é bug do produto, deriva do teste ou instabilidade de ambiente. Opera sobre a skill oficial playwright-cli, que executa a mecânica de navegação, geração e execução. Não cobre teste de carga, teste de API isolado nem correção do código da aplicação.
 ---
 
 # codesteer-cerberus
@@ -30,11 +30,12 @@ O que esta skill acrescenta são seis restrições que o fluxo oficial não imp�
 O fluxo oficial roda contra qualquer URL. Este não.
 
 ```bash
-uv run scripts/guard.py --url <URL> --mode <regression|spec-driven> [--truth <ref>]
+uv run scripts/guard.py --url <URL> --mode <regression|spec-driven|smoke> [--truth <ref>]
 ```
 
 - **exit 0** → prossiga. Leia `scope`: `CRUDL` libera criar/editar/apagar;
-  `RL` restringe a listar e ler.
+  `RL` restringe a listar e ler. Em `smoke` o `scope` é sempre `RL`, em
+  qualquer ambiente — não é o host que restringe, é o modo.
 - **exit != 0** → **PARE.** Mostre `errors` e peça correção. Não contorne.
 - `hitl` não vazio → pergunte ao usuário e **aguarde resposta**.
 
@@ -48,12 +49,27 @@ Pergunte se o usuário não disse. Não escolha sozinho.
 | :--- | :--- | :--- |
 | `regression` | Sem requisito escrito | Congela o comportamento atual. **`PRODUCT_BUG` é inalcançável** |
 | `spec-driven` | Com requisito, critério de aceite ou ticket | Único modo que pode afirmar defeito, e só com citação literal |
+| `smoke` | Verificação pós-deploy do caminho crítico | Somente leitura por construção (`scope: RL` sempre). **`PRODUCT_BUG` é inalcançável** |
 
 Declare ao usuário, em `regression`:
 
 > Os testes vão codificar o comportamento atual. Uma falha futura indica que
 > algo **mudou**, não que algo está **errado**. Não é possível afirmar "isto é
 > um bug" quando a expectativa foi extraída do próprio produto.
+
+Declare ao usuário, em `smoke`:
+
+> A suíte prova que o caminho crítico **está de pé**, não que ele está correto.
+> Nada será criado, editado ou apagado — nem em staging. Se o fluxo só é
+> verificável criando registro, ele não cabe aqui; é caso de `regression`.
+
+`smoke` é o modo que se pode apontar para produção com menos cerimônia: não há
+mutação para autorizar. Mas **o guard não infere produção** — sem
+`--allow-production`, um host de produção é classificado como `unknown`. Por
+isso, em `smoke`, host `unknown` gera `hitl`: pergunte se o alvo é produção
+antes de seguir, e declare a intenção se for. Ver
+`references/smoke-policy.md`: escolha do caminho crítico, orçamento, tag
+`@smoke` e o que a asserção precisa provar.
 
 Em `spec-driven`, `--truth` deve ser:
 
@@ -77,7 +93,9 @@ A–D em ~150 linhas — em vez de encher seu contexto com snapshot bruto. Se o
 subagent não estiver instalado, faça você mesmo seguindo
 `references/selector-health.md`.
 
-Classifique de A a D **antes** de gerar qualquer teste.
+Classifique de A a D **antes** de gerar qualquer teste. Em `smoke`, o nível vale
+para o **caminho crítico**, não para o app inteiro: se o checkout tem ganchos
+estáveis e o resto é D, gere o smoke do checkout e reporte o D do resto.
 
 > **Nível D — classes geradas (`css-1x2y3z`), sem roles, DOM instável: PARE.**
 > Não gere testes. Entregue `selector-recommendations.md` com os `data-testid`
@@ -120,11 +138,19 @@ Em `regression` sem fonte aprovada, omita `// truth:`.
 Uma frase no `// intent:`: o que este teste prova. É o valor que o gate congela
 na restrição 6 — sem ele, o healing não tem referência e é bloqueado.
 
+**Em `smoke`, POM é opcional** — a suíte é rasa e curta, e exigir page object
+para 5 casos é cerimônia sem retorno; reuse os POs que já existirem. O que não
+relaxa: `expect()` continua fora do page object (E8), o `// intent:` continua
+obrigatório, e cada arquivo carrega a tag `@smoke` (E9). Sem `// truth:`.
+
 ### 5. Todo dado criado é rastreável e removido
 
 Prefixe todo registro com `e2e-<runId>-`. Teardown em `afterEach` **e**
 varredura final por prefixo. Se `scope` for `RL`, gere só List e Read, e marque
 Create/Update/Delete como `SKIPPED_BY_GUARD` no relatório — visivelmente.
+
+Em `smoke` esta restrição é vácua: nada é criado. Se você escreveu um teardown,
+revise o caso — provavelmente ele não é smoke.
 
 ### 6. O healing passa pelo gate — sempre
 
@@ -167,9 +193,16 @@ um patch — é reportar a falha.
 | E6 | `.skip()` / `.fixme()` |
 | E7 | Spec sem nenhuma asserção — passa sempre |
 | E8 | `expect()` dentro de page object |
+| E9 | Teste smoke sem a tag `@smoke` — `--grep @smoke` não o executa |
+| E10 | Asserção tautológica (`expect(page).toBeTruthy()`, `body` visível) |
 
-Mais um aviso heurístico (A1): dado literal em `.fill()` sem o prefixo `e2e-`,
-que pode escapar do teardown. Aviso não falha o build — confira e decida.
+E três avisos heurísticos, que não falham o build — confira e decida:
+
+| Código | Aviso |
+| :---: | :--- |
+| A1 | Dado literal em `.fill()` sem o prefixo `e2e-`; pode escapar do teardown |
+| A2 | Suíte smoke acima de 12 casos — deixou de ser smoke |
+| A3 | Ação aparentemente mutante em teste smoke (smoke é `RL`) |
 
 ---
 
@@ -196,6 +229,18 @@ que pode escapar do teardown. Aviso não falha o build — confira e decida.
 11. REPORT        summary, mutations.diff, bug_report ← esta skill
 ```
 
+### Smoke (fluxo curto)
+
+Mesmo fluxo, quatro atalhos — detalhe em `references/smoke-policy.md`:
+
+| Passo | Em `smoke` |
+| :--- | :--- |
+| 4b / 4c | **Pulados.** Não há spec a aprovar; smoke não afirma requisito |
+| 5 PLAN | Vira a lista de caminhos críticos. Pergunte ao usuário quais fluxos, quebrados, valem rollback — e mostre a lista antes de gerar |
+| 7 POM | Opcional. `spec_lint` continua obrigatório (E9 e E10 são dele) |
+| 8 RUN | `npx playwright test --grep @smoke` |
+| 9 TRIAGEM | Árvore de smoke: 5xx reproduzível é `CRITICAL_PATH_DOWN`, não flake |
+
 ### Spec de critérios (passos 4b e 4c)
 
 **Não delegue.** O orquestrador redige o rascunho e conduz o HITL, seguindo
@@ -209,7 +254,8 @@ do usuário) — não justifica subagent.
 5. Rode `guard.py --mode spec-driven --truth <arquivo>` — `E008` se ainda draft
 6. Se o usuário pediu **só** critérios de aceite: **PARE** após 4c
 
-Em `regression` sem pedido de spec, pule 4b/4c e vá ao PLAN.
+Em `regression` sem pedido de spec, pule 4b/4c e vá ao PLAN. Em `smoke`, 4b/4c
+não se aplicam.
 
 ### Autenticação (passo 4)
 
@@ -264,10 +310,11 @@ a árvore é fixa.
 
 | Classe | Ação |
 | :--- | :--- |
-| `INFRA_FLAKE` | Retry com backoff, máx. 3 |
+| `INFRA_FLAKE` | Retry com backoff, máx. 3 — em `smoke`, retry único |
 | `TEST_DRIFT` | Único caso que autoriza editar o teste → passo 10 |
 | `BEHAVIOR_CHANGED` | **Não conserte.** Reporte |
 | `PRODUCT_BUG` | **Não conserte.** Gere `bug_report.md` com citação literal |
+| `CRITICAL_PATH_DOWN` | Só em `smoke`. **Não conserte.** Reporte já; recomende rollback ou escalada |
 | `UNCLASSIFIED` | **Não conserte.** Escale |
 
 ### Orçamento
@@ -275,6 +322,10 @@ a árvore é fixa.
 Pare e vá ao relatório ao atingir: 8 iterações no run, 3 curas no mesmo teste,
 20 minutos, ou timeout individual acima de 30s. Encerre com `BUDGET_EXCEEDED`.
 **Nunca desabilite testes para terminar verde.**
+
+Em `smoke` o orçamento é outro, porque a suíte gateia deploy: **máx. 12 casos,
+30s por caso, 5 minutos de suíte, 1 retry.** Segunda cura no mesmo caso smoke →
+pare de curar e reescreva a âncora; o alvo está fundo demais.
 
 ### Relatório (passo 11)
 
@@ -310,6 +361,7 @@ reference `storage-state.md`). As regras de política:
 | MFA ou SSO interativo | Sim |
 | Produção sem allowlist | Sim |
 | Gate rejeitou o mesmo patch 2× | Sim |
+| `CRITICAL_PATH_DOWN` em smoke | Sim — reporte antes de qualquer outra coisa |
 | Orçamento esgotado com testes vermelhos | Não, mas relate |
 | `UNCLASSIFIED` | Não, mas relate |
 | Resíduo de dados após teardown | Não, mas relate com a lista |
@@ -320,8 +372,8 @@ reference `storage-state.md`). As regras de política:
 
 ```bash
 uv run scripts/assertion_guard.py --self-test   # 19 casos
-uv run scripts/spec_lint.py --self-test         # 10 casos
-uv run scripts/guard.py --self-test             # 14 casos (inclui E008)
+uv run scripts/spec_lint.py --self-test         # 17 casos (inclui smoke)
+uv run scripts/guard.py --self-test             # 21 casos (inclui E008 e smoke)
 uv run scripts/assertion_guard.py --check-po tests/   # invariante do POM
 npx --no-install playwright-cli --version       # skill oficial disponível?
 ls .claude/agents/e2e-*.md                      # subagents instalados?
@@ -335,6 +387,7 @@ Se `playwright-cli` não estiver instalado: `npm install -g @playwright/cli@late
 ## Referências
 
 - `references/spec-generation.md` — critérios `.spec.md`, HITL e derivação do plan
+- `references/smoke-policy.md` — caminho crítico, orçamento, tag `@smoke`, produção
 - `references/healing-policy.md` — o gate, e o que ele revoga do fluxo oficial
 - `references/triage-guide.md` — árvore de classificação de falha
 - `references/auth-playbook.md` — autenticar uma vez; armadilhas de sessão
