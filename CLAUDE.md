@@ -40,3 +40,7 @@ Este repositório é um marketplace/plugin Claude Code (`.claude-plugin/`).
 ```
 
 Ou local: `claude --plugin-dir /caminho/para/codesteer-cerberus`.
+
+Verificação da instalação: `npm test` (self-tests dos gates + pytest).
+Legado sem `--policy` permanece; estrito bloqueia HITL pendente. Sem alvo
+remoto implícito (`E2E_BASE_URL`, default da fixture).
