@@ -283,8 +283,9 @@ def comparar_superficie(
 ) -> Verdict:
     """Compara a superfície candidata ao ManifestoDeBaseline do host.
 
-    @MindSpec: Sem manifesto suficiente, baseline do candidato, import dinâmico
-    ou mudança de fixture/config → REJEITA. Locator em PO/helper → no mínimo exit 2.
+    @MindSpec: Sem manifesto suficiente, baseline do candidato, import dinâmico,
+    import fora da raiz, helper/PO novo ou ausente, ou mudança de fixture/config
+    → REJEITA. Locator em PO/helper já hasheado → no mínimo exit 2.
     """
     from validate_evidence import validar
 
@@ -307,6 +308,7 @@ def comparar_superficie(
             pass
 
     hashes = manifesto.get("content_hashes") or {}
+    root = Path(manifesto["authorized_root"])
     trocas_po = []
     for path in sorted(p for p in surface.rglob("*") if p.is_file()):
         if IGNORAR & set(path.parts):
@@ -314,7 +316,9 @@ def comparar_superficie(
         rel = path.relative_to(surface).as_posix()
         nome = (rel + " " + path.name).lower()
         if path.suffix in {".ts", ".js", ".tsx"}:
-            suite = parse_suite(path.read_bytes(), str(path))
+            suite = parse_suite(
+                path.read_bytes(), str(path), authorized_root=root,
+            )
             if any(imp.dynamic for imp in suite.imports):
                 return Verdict("REJEITA", REJEITA, "import dinâmico",
                                {"arquivo": rel})
@@ -331,8 +335,22 @@ def comparar_superficie(
                 {"arquivo": rel},
             )
         eh_po = path.match("*.page.ts") or path.match("*.po.ts") or "helper" in nome
-        if eh_po and esperado and esperado != atual:
+        if eh_po and esperado != atual:
+            if not esperado:
+                return Verdict(
+                    "REJEITA", REJEITA,
+                    "helper/PO novo sem baseline do host",
+                    {"arquivo": rel},
+                )
             trocas_po.append(rel)
+
+    for rel, _esperado in hashes.items():
+        if not (surface / rel).is_file():
+            return Verdict(
+                "REJEITA", REJEITA,
+                "arquivo da baseline ausente na superfície",
+                {"arquivo": rel},
+            )
 
     if trocas_po:
         prova = bool(evidencias and evidencias.get("mesmo_alvo"))

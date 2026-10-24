@@ -80,6 +80,33 @@ def test_v5_manifesto_incompleto(tmp_path: Path):
     assert v.exit_code == REJEITA
 
 
+def test_v5_helper_novo(tmp_path: Path):
+    (tmp_path / "helper.ts").write_text("export const h = 1;\n", encoding="utf-8")
+    v = comparar_superficie(_baseline(tmp_path, {}), tmp_path)
+    assert v.exit_code == REJEITA
+    assert "novo" in v.reason
+
+
+def test_v5_helper_listado_ausente(tmp_path: Path):
+    hashes = {"helper.ts": "sha256:" + ("b" * 64)}
+    (tmp_path / "keep.spec.ts").write_text("export {};\n", encoding="utf-8")
+    v = comparar_superficie(_baseline(tmp_path, hashes), tmp_path)
+    assert v.exit_code == REJEITA
+    assert "ausente" in v.reason
+
+
+def test_v5_import_fora_da_root(tmp_path: Path):
+    surface = tmp_path / "surface"
+    surface.mkdir()
+    (tmp_path / "fora.ts").write_text("export const x = 1;\n", encoding="utf-8")
+    (surface / "a.spec.ts").write_text(
+        "import { x } from '../fora';\n", encoding="utf-8",
+    )
+    v = comparar_superficie(_baseline(surface, {}), surface)
+    assert v.exit_code == REJEITA
+    assert "raiz" in v.reason
+
+
 def test_exit2_traz_alvo_dominio():
     antes = (
         b"// intent: x\n"

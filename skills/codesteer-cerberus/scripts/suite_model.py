@@ -4,9 +4,11 @@
 no mesmo processo Python dos gates — sem ponte Node ou Compiler API.
 @MindDecision: Identidade de teste é `// test-id:` ou path+título; literais
 do matcher não sofrem colapso semântico; forma desconhecida não vira APROVA.
-@MindRisk: Análise não promete equivalência semântica geral de TypeScript.
-@MindSpec: parse_suite(bytes, path?) → Suite | parse inválido em parse_error;
-comparação de prova é por test_id, alvo e ordem, nunca lista global de matchers.
+@MindSpec: parse_suite(bytes, path?, authorized_root?) → Suite | parse inválido
+em parse_error; comparação de prova é por test_id, alvo e ordem, nunca lista
+global de matchers. Sem authorized_root, outside_root permanece falso.
+@MindRisk: Análise não promete equivalência semântica geral de TypeScript;
+import fora da raiz só é visível quando o caller passa authorized_root.
 """
 
 from __future__ import annotations
@@ -129,7 +131,11 @@ def parse_source(source: bytes) -> tuple[object, bool]:
     return tree, bool(tree.root_node.has_error)
 
 
-def parse_suite(source: bytes, path: str = "") -> Suite:
+def parse_suite(
+    source: bytes,
+    path: str = "",
+    authorized_root: Path | None = None,
+) -> Suite:
     tree, erro = parse_source(source)
     root = tree.root_node
     if erro:
@@ -166,7 +172,9 @@ def parse_suite(source: bytes, path: str = "") -> Suite:
         timeouts=_timeouts_ajuste(root),
         expect_rebound=rebound,
         unsupported=unsupported,
-        imports=extrair_imports(source, Path(path) if path else None, None),
+        imports=extrair_imports(
+            source, Path(path) if path else None, authorized_root,
+        ),
         bindings=bindings,
     )
 
