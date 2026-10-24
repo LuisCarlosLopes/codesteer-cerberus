@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "run_id": "run-local-fixture-001",
+  "test_id": "evals::critical-path-loads",
+  "project": "chromium",
+  "attempt": 1,
+  "mode": "smoke",
+  "policy": "legacy",
+  "suite_revision": "sha256:fixture-suite-rev-1",
+  "target": "http://127.0.0.1:4173/",
+  "deployment_identity": {
+    "sha": "local-fixture",
+    "deployment_id": "fixture",
+    "demonstrated": false
+  },
+  "inventories": {
+    "expected": ["evals::critical-path-loads"],
+    "selected": ["evals::critical-path-loads"],
+    "executed": ["evals::critical-path-loads"],
+    "exclusions": []
+  },
+  "source_executed": {
+    "path": "skills/codesteer-cerberus/evals/critical-path.spec.ts",
+    "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "artifacts": [
+    {
+      "path": ".e2e-engine/runs/run-local-fixture-001/trace.zip",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "present": true
+    }
+  ],
+  "finalized_at": "2026-10-24T22:00:00Z",
+  "block_cases": [
+    {
+      "name": "hash_divergente",
+      "reason": "source_executed.hash ≠ arquivo na raiz autorizada"
+    },
+    {
+      "name": "resultado_obsoleto",
+      "reason": "result.revision de outro build não verifica este SHA"
+    }
+  ]
+}
