@@ -9,3 +9,7 @@ playwright-report/
 .DS_Store
 .e2e-engine/auth/
 .playwright-cli/
+.memory-bank/*
+!.memory-bank/adrs/
+!.memory-bank/adrs/**
+**/__pycache__/

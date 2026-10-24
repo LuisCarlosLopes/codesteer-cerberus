@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "origins": {
+    "local": "http://127.0.0.1:4173",
+    "dev": "http://127.0.0.1:4173"
+  },
+  "allowed_paths": [
+    "skills/codesteer-cerberus/evals",
+    "skills/codesteer-cerberus/examples"
+  ],
+  "mode": "smoke",
+  "scope": "RL",
+  "budget": {
+    "max_cases": 12,
+    "max_seconds_per_case": 30,
+    "max_suite_minutes": 5,
+    "retries": 1
+  },
+  "approval_refs": [
+    "hitl-pre-implementer:approve-implement-A1a"
+  ],
+  "content_hash": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+}

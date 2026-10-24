@@ -65,7 +65,7 @@ Entre 3 e 8 casos. Um caso por caminho, não por asserção.
 
 | Item | Teto | Por quê |
 | :--- | :---: | :--- |
-| Casos na suíte | 12 | Acima disso o `spec_lint` avisa (A2): deixou de ser smoke |
+| Casos na suíte | 12 | Acima disso o `spec_lint` avisa (A2) e o run viola L02 |
 | Caso individual | 30s | Mesmo teto do healing; smoke lento não gateia deploy |
 | Suíte inteira | 5 min | Ninguém segura um deploy esperando |
 | Retries | **1** | Ver abaixo |
@@ -111,6 +111,15 @@ mantém o `--grep @smoke` funcionando de qualquer lugar — inclusive de um runn
 que não conhece seus projects.
 
 Sem `// truth:` — smoke não tem fonte de verdade.
+
+`@smoke` resolve-se **por caso**, com herança de `test.describe`. Comentário e
+string não contam. Mutação de domínio identificada (criar, editar, excluir,
+publicar) é **E11** (ERRO) — A3 deixa de ser o único sinal. Ação que o lint não
+classifica como leitura, login excepcional ou filtro de busca é **E12**: a
+suíte não é liberada. Login excepcional e filtro de busca sob contrato passam.
+
+Perfil legado (sem `--policy`): host `unknown` em smoke pode sair `approved`
+com `hitl`. Perfil estrito: HITL pendente bloqueia.
 
 ## A asserção precisa provar algo
 

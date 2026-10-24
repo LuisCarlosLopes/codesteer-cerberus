@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "suite_revision": "sha256:fixture-suite-rev-1",
+  "requested_scope": 2,
+  "authorized_scope": 1,
+  "entries": [
+    {
+      "origin": "observed",
+      "discovery": "explored",
+      "stage": "executed",
+      "feature": "caminho-critico",
+      "scenario": "pagina-inicial-responde",
+      "test_id": "evals::critical-path-loads",
+      "criterion_ref": null,
+      "result": {
+        "env": "local",
+        "revision": "sha256:fixture-suite-rev-1",
+        "run_id": "run-local-fixture-001",
+        "attempt": 1,
+        "outcome": "passed"
+      }
+    },
+    {
+      "origin": "observed",
+      "discovery": "partial",
+      "stage": "generated",
+      "feature": "caminho-critico",
+      "scenario": "defeito-conhecido-ainda-vermelho",
+      "test_id": "evals::known-defect-stays-red",
+      "criterion_ref": null
+    }
+  ],
+  "exclusions": [
+    {
+      "id": "evals::write-path",
+      "reason": "guard recusou mutação em smoke",
+      "by": "guard"
+    }
+  ]
+}

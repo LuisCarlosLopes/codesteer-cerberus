@@ -41,5 +41,9 @@ Garanta `playwright-cli` / `@playwright/cli` no ambiente Cloud (setup do
 projeto). Rode os self-tests dos gates se alterar a skill:
 
 ```bash
-python3 skills/codesteer-cerberus/scripts/guard.py --self-test
+npm test
 ```
+
+Perfil legado (default) vs `--policy` estrito: HITL pendente no estrito
+bloqueia. O host lança o runner; o Cerberus não abre browser. Fixture local
+em `skills/codesteer-cerberus/evals` (`E2E_BASE_URL`).

@@ -1,0 +1,43 @@
+# Exemplo parametrizado — o host do produto preenche URL, SHA e deployment.
+# Não publica comentário, não altera branch protection, não faz deploy, sem segredo.
+name: consumer-e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        required: true
+      expected_sha:
+        required: true
+      deployment_id:
+        required: true
+
+jobs:
+  gated-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard (autorização)
+        env:
+          E2E_BASE_URL: ${{ inputs.url }}
+        run: |
+          python3 skills/codesteer-cerberus/scripts/guard.py \
+            --url "$E2E_BASE_URL" --mode smoke
+
+      - name: Readiness HTTP (não prova identidade do build)
+        env:
+          E2E_BASE_URL: ${{ inputs.url }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$E2E_BASE_URL/health")
+          test "$code" -lt 500
+
+      - name: Runner nativo na seleção autorizada
+        env:
+          E2E_BASE_URL: ${{ inputs.url }}
+        run: npx playwright test --grep @smoke
+
+      - name: Pós-processar inventário (sem browser)
+        run: |
+          python3 skills/codesteer-cerberus/scripts/run_report.py verify-ci \
+            --input skills/codesteer-cerberus/examples/run-manifest.json

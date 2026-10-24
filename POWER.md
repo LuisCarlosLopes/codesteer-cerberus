@@ -32,11 +32,11 @@ Ao ativar este power pela primeira vez:
 3. Rode os self-tests dos gates (na raiz deste repositório / plugin):
 
    ```bash
-   python3 skills/codesteer-cerberus/scripts/guard.py --self-test
-   pip install tree-sitter tree-sitter-typescript
-   python3 skills/codesteer-cerberus/scripts/assertion_guard.py --self-test
-   python3 skills/codesteer-cerberus/scripts/spec_lint.py --self-test
+   npm test
    ```
+
+   Política ≠ permissão do servidor ≠ proteção do host. Perfil legado é o
+   default; `--policy` é opt-in.
 
 4. Se algum self-test falhar, **não use o passo de healing** até corrigir o gate.
 

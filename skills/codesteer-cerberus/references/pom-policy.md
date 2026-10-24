@@ -26,6 +26,11 @@ async verificarStatus(esperado: string) {
 
 A convenção não é preferência estética. É a premissa da qual a garantia depende.
 
+**Ausência de `expect()` no PO não autoriza mudar locator.** Troca de locator
+em `.page.ts` / helper recebe no mínimo exit 2 e exige impacto nos specs
+dependentes (`comparar_superficie`). O PO sem asserção só preserva a
+visibilidade da prova — não libera o endereço.
+
 ## Estrutura
 
 ```

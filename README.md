@@ -244,9 +244,11 @@ skills/codesteer-cerberus/
 │   ├── triage-guide.md      # árvore de classificação de falha
 │   └── auth-playbook.md     # storageState / login único por run
 └── scripts/
-    ├── guard.py             # ambiente, modo, E008 (draft)
-    ├── assertion_guard.py   # gate de healing + --check-po
-    └── spec_lint.py         # varredura estática da suíte
+    ├── guard.py             # ambiente, modo, E008; --policy estrito
+    ├── assertion_guard.py   # gate de healing + --baseline/--surface
+    ├── spec_lint.py         # varredura estática (E11/E12 smoke)
+    ├── validate_evidence.py # schemas v1 fail-closed
+    └── run_report.py        # evidência/mapa/CI (não lança runner)
 
 agents/                      # e2e-*.md canônicos; *.agent.md = symlink (Copilot)
 .claude-plugin/               # marketplace Claude Code
@@ -299,11 +301,20 @@ Versionamento: ao publicar comportamento novo, bump `version` em
 ## Self-tests dos gates
 
 ```bash
+npm test
+```
+
+Equivale aos três `--self-test` dos gates (piso de 57 casos) mais as
+regressões pytest. Comando real e reproduzível:
+
+```bash
 cd skills/codesteer-cerberus
 python3 scripts/guard.py --self-test
 pip install tree-sitter tree-sitter-typescript   # uma vez
 python3 scripts/assertion_guard.py --self-test
 python3 scripts/spec_lint.py --self-test
+pip install -r requirements-test.txt
+python3 -m pytest tests -q
 ```
 
 Com `uv`:
@@ -316,8 +327,22 @@ uv run scripts/spec_lint.py --self-test
 Os três devem sair com código 0. Se o gate falhar, **não use healing** — a
 barreira está quebrada.
 
-CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda esses
-self-tests em todo push/PR.
+CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) mantém a job
+`self-tests` (57+ casos, sem browser e sem modelo) e acrescenta regressões
+pytest e a fixture local. Ensaios de corpus **não** entram nessa job.
+
+### Legado vs estrito
+
+| Camada | O que garante | O que não garante |
+| :--- | :--- | :--- |
+| Política (`--policy`) | Origem, modo, escopo, hash revisados | Permissão do servidor de produto |
+| Bloqueio estático (gates) | Falso `APROVA`, parse vazio, mutação smoke | Equivalência semântica de TypeScript |
+| Permissão do servidor | Conta de leitura / allowlist no host | O Cerberus não autentica sozinho |
+| Limitação do host | Proteção de baseline, SHA, inventário | Hash local de agente não é aprovação humana |
+
+Sem `--policy` o guard permanece legado: host `unknown` em smoke pode sair
+`approved` com `hitl`. Alvo default do runner é `E2E_BASE_URL`
+(`http://127.0.0.1:4173`), não um produto remoto.
 
 ---
 

@@ -174,7 +174,7 @@ header é rejeitado.
 | Exit | Decisão | Ação |
 | :---: | :--- | :--- |
 | 0 | APROVA | Aplique. Registre o diff |
-| 2 | APROVA_COM_PROVA | Locator dentro de `expect()` mudou. Confirme no snapshot que resolve para o **mesmo elemento**. Sem prova, trate como rejeitado |
+| 2 | APROVA_COM_PROVA | Locator dentro de `expect()` mudou. Confirme no snapshot que resolve para o **mesmo alvo de domínio** (entidade, papel+nome ou testid, cardinalidade, escopo). Sem prova, trate como rejeitado |
 | 1 | REJEITA | **Descarte o patch.** Não reformule para passar. 2ª rejeição → escale |
 
 **Nunca edite um `.spec.ts` sem passar pelo gate.** Se você se pegar querendo
@@ -195,6 +195,22 @@ um patch — é reportar a falha.
 | E8 | `expect()` dentro de page object |
 | E9 | Teste smoke sem a tag `@smoke` — `--grep @smoke` não o executa |
 | E10 | Asserção tautológica (`expect(page).toBeTruthy()`, `body` visível) |
+| E11 | Mutação de domínio em smoke (criar/editar/excluir/publicar) — bloqueia a suíte |
+| E12 | Ação smoke não classificada como leitura, login excepcional ou filtro de busca |
+| E13–E15 | Parse inválido, raiz/inventário vazio, timeout > 30_000 ms |
+
+Todo `.spec.ts` novo ou curado declara `// test-id: <id-estável>` além do `// intent:`. Sem ele, a identidade cai para path+título.
+
+Flags opt-in (a invocação atual sem elas permanece válida):
+
+```bash
+uv run scripts/guard.py --url <URL> --mode <modo> --policy examples/project-policy.json \
+  --approval-record registro.json
+uv run scripts/assertion_guard.py --baseline manifesto.json --surface .
+uv run scripts/run_report.py emit --run-dir .e2e-engine/runs/<runId> --package pacote.json
+```
+
+`--policy` ativa o perfil estrito: HITL pendente bloqueia (`approved: false`). Sem `--policy` o JSON não inclui `policy_profile`. O host — não o Cerberus — lança o runner e aplica o hash validado.
 
 E três avisos heurísticos, que não falham o build — confira e decida:
 
@@ -202,7 +218,7 @@ E três avisos heurísticos, que não falham o build — confira e decida:
 | :---: | :--- |
 | A1 | Dado literal em `.fill()` sem o prefixo `e2e-`; pode escapar do teardown |
 | A2 | Suíte smoke acima de 12 casos — deixou de ser smoke |
-| A3 | Ação aparentemente mutante em teste smoke (smoke é `RL`) |
+| A3 | Residual; mutação identificada é E11, não só aviso |
 
 ---
 

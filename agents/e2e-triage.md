@@ -38,9 +38,13 @@ Feche a sessão e pare o run em background quando terminar.
 Leia `references/triage-guide.md` da skill `codesteer-cerberus`. A árvore de
 decisão é fixa — não crie categorias novas.
 
-Antes de qualquer coisa: se o primeiro teste redirecionou para `/login`, a
-sessão expirou. Diga isso e pare — não classifique uma cascata de falhas com
-causa única.
+Cite `evidence_package_ref` do pacote da tentativa. Redirect para `/login`
+sem evidência de auth/permissão/rota é `UNCLASSIFIED`, não drift. Confiança
+não autoriza healing, modo, política nem fonte.
+
+Antes de qualquer coisa: se o primeiro teste redirecionou para `/login` e
+não há evidência de auth, classifique `UNCLASSIFIED` e pare — não trate o
+redirect isolado como deriva do teste.
 
 ## Restrições que você não pode relaxar
 
@@ -66,8 +70,9 @@ decidir. Uma triagem que sempre conclui é uma triagem que às vezes mente.
 ```markdown
 ## <id do teste>
 **Classe:** INFRA_FLAKE | TEST_DRIFT | BEHAVIOR_CHANGED | PRODUCT_BUG | CRITICAL_PATH_DOWN | UNCLASSIFIED
-**Confiança:** 0.0–1.0
+**Confiança:** 0.0–1.0 (não autoriza)
 **Intent:** <o que o teste provava>
+**evidence_package_ref:** <run/teste/projeto/tentativa>
 
 **Evidência:**
 - <fato observado, com origem: snapshot, console, requests>

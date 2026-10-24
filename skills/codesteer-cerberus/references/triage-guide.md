@@ -28,9 +28,16 @@ Não classifique sem ter as seis. Colete com a skill oficial:
 Faltando alguma, obtenha antes. Se o trace estiver desligado no
 `playwright.config.ts`, você não tem base para triagem — resolva isso primeiro.
 
-**Antes de tudo:** se o primeiro teste redirecionou para `/login`, a sessão
-expirou. Regrave o estado (`playwright-cli state-save`) e rode de novo. Triar
-uma cascata de falhas com causa única gera diagnóstico errado em série.
+Toda decisão que autoriza healing cita `evidence_package_ref` do pacote da
+mesma tentativa (run × teste × projeto × tentativa). Redirect para `/login`
+**sem** evidência de auth, permissão ou rota é `UNCLASSIFIED` — não é, sozinho,
+prova de sessão expirada nem `TEST_DRIFT`. `PRODUCT_BUG` exige fonte
+`approved`, citação literal **e** evidência de que o observado a contradiz.
+Confiança autodeclarada não autoriza.
+
+**Antes de tudo:** se o primeiro teste redirecionou para `/login` e não há
+evidência de auth/permissão/rota, classifique `UNCLASSIFIED` e pare. Não trate
+redirect isolado como drift.
 
 ## Árvore de decisão
 
