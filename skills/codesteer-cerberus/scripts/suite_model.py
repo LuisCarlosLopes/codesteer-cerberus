@@ -81,6 +81,13 @@ class AssercaoModelo:
     unsupported: str | None = None
 
 
+@dataclass(frozen=True)
+class AcaoModelo:
+    kind: str
+    receiver: str
+    line: int
+
+
 @dataclass
 class CasoTeste:
     test_id: str
@@ -89,6 +96,7 @@ class CasoTeste:
     assertions: list[AssercaoModelo]
     start_line: int
     modifiers: set[str] = field(default_factory=set)
+    acoes: list[AcaoModelo] = field(default_factory=list)
 
 
 @dataclass
@@ -144,6 +152,7 @@ def parse_suite(source: bytes, path: str = "") -> Suite:
             tags=frozenset(),
             assertions=assertions_all,
             start_line=1,
+            acoes=_acoes_no(root),
         )]
 
     return Suite(
@@ -283,6 +292,7 @@ def _coletar_testes(root: Node, path: str, bindings: dict[str, str]) -> list[Cas
                 title, tags, body = _args_teste(node)
                 todas = herdadas | tags
                 assercoes = _assercoes_no(body, body) if body is not None else []
+                acoes = _acoes_no(body) if body is not None else []
                 mods = set()
                 if nome.endswith(".skip"):
                     mods.add("skip")
@@ -297,6 +307,7 @@ def _coletar_testes(root: Node, path: str, bindings: dict[str, str]) -> list[Cas
                     assertions=assercoes,
                     start_line=node.start_point[0] + 1,
                     modifiers=mods,
+                    acoes=acoes,
                 ))
                 return
         for child in node.children:
@@ -484,6 +495,31 @@ def _assercoes_no(escopo: Node | None, corpo: Node | None) -> list[AssercaoModel
             wrapped=_wrapper_de(node, corpo),
             unsupported=uns,
         ))
+    return out
+
+
+ACTION_PROPS = frozenset({
+    "click", "dblclick", "tap", "fill", "type", "press", "pressSequentially",
+    "setInputFiles", "check", "uncheck", "setChecked", "selectOption",
+    "dragTo", "goto", "goBack", "goForward", "reload",
+    "waitFor", "waitForURL", "waitForSelector", "waitForLoadState",
+    "hover", "focus", "blur",
+})
+
+
+def _acoes_no(escopo: Node | None) -> list[AcaoModelo]:
+    if escopo is None:
+        return []
+    out: list[AcaoModelo] = []
+    for n in QueryCursor(Q_CALL).captures(escopo).get("call", []):
+        fn = n.child_by_field_name("function")
+        if fn is None or fn.type != "member_expression":
+            continue
+        prop = fn.child_by_field_name("property")
+        obj = fn.child_by_field_name("object")
+        kind = _texto(prop)
+        if kind in ACTION_PROPS:
+            out.append(AcaoModelo(kind, _texto(obj), n.start_point[0] + 1))
     return out
 
 

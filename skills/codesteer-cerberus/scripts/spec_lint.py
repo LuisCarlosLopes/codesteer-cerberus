@@ -23,11 +23,16 @@ ERRO (exit 1) — decidível estaticamente, sem falso positivo esperado:
   E8  expect() em page object   cega o gate; ver pom-policy.md
   E9  smoke sem a tag @smoke    `--grep @smoke` não o executa; some do CI calado
   E10 asserção tautológica      `expect(page).toBeTruthy()` e afins não provam nada
+  E11 mutação de domínio em smoke (criar/editar/excluir/publicar)
+  E12 ação smoke não classificada (não libera a suíte)
+  E13 parse inválido            fail-closed
+  E14 raiz/inventário vazio     fail-closed (exit 1, não 3)
+  E15 timeout acima de 30_000 ms
 
 AVISO (não falha) — heurístico, pode ter falso positivo:
   A1  dado literal sem prefixo `e2e-` em .fill()
   A2  suíte smoke acima do orçamento de casos (ver smoke-policy.md)
-  A3  ação aparentemente mutante em teste smoke (smoke é somente leitura)
+  A3  residual; mutação identificada é E11, não só aviso
 
 USO
 ---
@@ -54,6 +59,12 @@ from pathlib import Path
 
 from tree_sitter import Language, Parser, Query, QueryCursor
 import tree_sitter_typescript as tsts
+
+from suite_model import (
+    MAX_TIMEOUT_MS,
+    eh_smoke_caso,
+    parse_suite,
+)
 
 TS = Language(tsts.language_typescript())
 PARSER = Parser(TS)
@@ -133,6 +144,11 @@ MENSAGENS = {
     "E8": "asserção dentro de page object cega o gate — mova para o `.spec.ts`",
     "E9": "teste smoke sem a tag `@smoke` — `--grep @smoke` não vai executá-lo",
     "E10": "asserção tautológica — passa com o produto quebrado; prove um sinal real",
+    "E11": "mutação de domínio em smoke — criar/editar/excluir/publicar bloqueia a suíte",
+    "E12": "ação smoke não classificada como leitura, login excepcional ou filtro de busca",
+    "E13": "arquivo não parseia como TypeScript — o que não se analisa não se aprova",
+    "E14": "raiz inexistente ou inventário vazio — falha de lint, não só erro de uso",
+    "E15": f"timeout acima do teto de {MAX_TIMEOUT_MS} ms (qualquer notação numérica)",
     "A1": "dado literal sem prefixo `e2e-` — pode não ser rastreável no teardown",
     "A2": f"suíte smoke acima de {LIMITE_CASOS_SMOKE} casos — deixou de ser smoke",
     "A3": "ação aparentemente mutante em smoke — smoke é somente leitura (scope RL)",
@@ -147,16 +163,16 @@ def eh_smoke_por_caminho(caminho: Path) -> bool:
 
 def eh_smoke(caminho: Path, texto: str | None = None) -> bool:
     """
-    Caminho **ou** tag. Um arquivo marcado `@smoke` é smoke onde quer que
-    esteja: é a tag que decide o que o CI executa, então é ela que decide
-    quais regras se aplicam. O caminho continua valendo para pegar o arquivo
-    que está na pasta certa e esqueceu a tag (E9).
+    Caminho **ou** tag por caso (com herança de describe). Comentário e
+    string não contam — é `--grep @smoke` que decide o que o CI executa.
+    O caminho continua valendo para pegar o arquivo na pasta certa que
+    esqueceu a tag (E9).
     """
     if eh_smoke_por_caminho(caminho):
         return True
-    if texto is None:
-        texto = caminho.read_text(encoding="utf-8")
-    return bool(RE_TAG_SMOKE.search(texto))
+    fonte = caminho.read_bytes() if texto is None else texto.encode()
+    suite = parse_suite(fonte, str(caminho))
+    return any(eh_smoke_caso(c) for c in suite.tests)
 
 
 @dataclass
@@ -179,10 +195,56 @@ def coletar(raiz: Path, padroes: tuple[str, ...]) -> list[Path]:
 
 
 def tem_assercao(fonte: bytes) -> bool:
-    tree = PARSER.parse(fonte)
-    if tree.root_node.has_error:
-        return True   # não penaliza o que não parseia; o gate já rejeita isso
-    return bool(QueryCursor(Q_EXPECT).captures(tree.root_node).get("call", []))
+    suite = parse_suite(fonte)
+    if suite.parse_error:
+        return False
+    return bool(suite.assertions)
+
+
+RE_VERBO_MUTACAO = re.compile(
+    r"(?ix)\b(?:salvar|save|criar|create|cadastrar|novo|nova|new|"
+    r"excluir|deletar|delete|remover|remove|apagar|"
+    r"confirmar|confirm|enviar|submit|publicar|publish|"
+    r"editar|edit|atualizar|update)\b"
+)
+RE_LOGIN = re.compile(r"(?ix)\b(?:entrar|login|signin|sign-in|acessar|logar)\b")
+RE_CAMPO_LOGIN = re.compile(
+    r"(?ix)\b(?:senha|password|e-?mail|usuario|username)\b"
+)
+RE_BUSCA = re.compile(
+    r"(?ix)\b(?:busca|buscar|search|filtrar|filtro|filter|searchbox)\b"
+)
+_LEITURA = {
+    "goto", "goBack", "goForward", "reload",
+    "waitFor", "waitForURL", "waitForSelector", "waitForLoadState",
+    "hover", "focus", "blur",
+}
+_MUTACAO_DIRETA = {
+    "fill", "type", "pressSequentially", "setInputFiles",
+    "selectOption", "check", "uncheck", "setChecked",
+}
+_CLICK = {"click", "dblclick", "tap"}
+
+
+def classificar_acao_smoke(kind: str, receiver: str) -> str:
+    """leitura | login | busca | mutacao | nao_classificada."""
+    if kind in _LEITURA:
+        return "leitura"
+    if kind in _MUTACAO_DIRETA:
+        if RE_CAMPO_LOGIN.search(receiver) or RE_LOGIN.search(receiver):
+            return "login"
+        if RE_BUSCA.search(receiver):
+            return "busca"
+        return "mutacao"
+    if kind in _CLICK:
+        if RE_VERBO_MUTACAO.search(receiver):
+            return "mutacao"
+        if RE_LOGIN.search(receiver) or RE_CAMPO_LOGIN.search(receiver):
+            return "login"
+        if RE_BUSCA.search(receiver):
+            return "busca"
+        return "nao_classificada"
+    return "nao_classificada"
 
 
 def linha_de(texto: str, pos: int) -> int:
@@ -198,6 +260,11 @@ def analisar_spec(caminho: Path) -> list[Achado]:
         out.append(Achado(cod, sev, str(caminho), ln, trecho.strip()[:90],
                           MENSAGENS[cod]))
 
+    suite = parse_suite(fonte, str(caminho))
+    if suite.parse_error:
+        add("E13", "ERRO", 1, "(parse)")
+        return out
+
     for codigo, _rotulo, regex in REGRAS_TEXTO:
         for m in regex.finditer(texto):
             ln = linha_de(texto, m.start())
@@ -210,20 +277,35 @@ def analisar_spec(caminho: Path) -> list[Achado]:
     if not RE_INTENT.search(texto):
         add("E4", "ERRO", 1, "(topo do arquivo)")
 
-    if not tem_assercao(fonte):
+    if suite.tests:
+        for caso in suite.tests:
+            if not caso.assertions:
+                add("E7", "ERRO", caso.start_line, caso.title or "(caso sem asserção)")
+    elif not suite.assertions:
         add("E7", "ERRO", 1, "(arquivo inteiro)")
 
     for m in RE_ASSERCAO_VAZIA.finditer(texto):
         ln = linha_de(texto, m.start())
         add("E10", "ERRO", ln, texto.splitlines()[ln - 1])
 
-    tem_tag = bool(RE_TAG_SMOKE.search(texto))
-    if eh_smoke_por_caminho(caminho) or tem_tag:
-        if not tem_tag:
-            add("E9", "ERRO", 1, "(nenhum test/describe com @smoke)")
-        for m in RE_ACAO_MUTANTE.finditer(texto):
-            ln = linha_de(texto, m.start())
-            add("A3", "AVISO", ln, texto.splitlines()[ln - 1])
+    for valor in suite.timeouts:
+        if valor > MAX_TIMEOUT_MS:
+            add("E15", "ERRO", 1, f"timeout: {valor}")
+
+    smoke_path = eh_smoke_por_caminho(caminho)
+    for caso in suite.tests:
+        tagged = eh_smoke_caso(caso)
+        if smoke_path and not tagged:
+            add("E9", "ERRO", caso.start_line,
+                caso.title or "(caso smoke sem @smoke)")
+        if not (smoke_path or tagged):
+            continue
+        for acao in caso.acoes:
+            classe = classificar_acao_smoke(acao.kind, acao.receiver)
+            if classe == "mutacao":
+                add("E11", "ERRO", acao.line, acao.kind)
+            elif classe == "nao_classificada":
+                add("E12", "ERRO", acao.line, acao.kind)
 
     for m in RE_FILL.finditer(texto):
         valor = m.group(1)
@@ -240,11 +322,14 @@ def analisar_po(caminho: Path) -> list[Achado]:
     out: list[Achado] = []
 
     tree = PARSER.parse(texto.encode())
-    if not tree.root_node.has_error:
-        for node in QueryCursor(Q_EXPECT).captures(tree.root_node).get("call", []):
-            ln = node.start_point[0] + 1
-            out.append(Achado("E8", "ERRO", str(caminho), ln,
-                              texto.splitlines()[ln - 1].strip()[:90], MENSAGENS["E8"]))
+    if tree.root_node.has_error:
+        out.append(Achado("E13", "ERRO", str(caminho), 1, "(parse)",
+                          MENSAGENS["E13"]))
+        return out
+    for node in QueryCursor(Q_EXPECT).captures(tree.root_node).get("call", []):
+        ln = node.start_point[0] + 1
+        out.append(Achado("E8", "ERRO", str(caminho), ln,
+                          texto.splitlines()[ln - 1].strip()[:90], MENSAGENS["E8"]))
 
     for m in RE_SELETOR_FRAGIL.finditer(texto):
         ln = linha_de(texto, m.start())
@@ -275,8 +360,14 @@ def orcamento_smoke(specs: list[Path]) -> list[Achado]:
 
 
 def lint(raiz: Path) -> tuple[list[Achado], int, int]:
+    if not raiz.exists():
+        return ([Achado("E14", "ERRO", str(raiz), 1, "(raiz)", MENSAGENS["E14"])],
+                0, 0)
     specs = coletar(raiz, PADROES_SPEC)
     pos = coletar(raiz, PADROES_PO)
+    if not specs and not pos:
+        return ([Achado("E14", "ERRO", str(raiz), 1, "(inventário vazio)",
+                        MENSAGENS["E14"])], 0, 0)
     achados: list[Achado] = []
     for s in specs:
         achados += analisar_spec(s)
@@ -357,7 +448,7 @@ CASOS_LINT = [
     # Fora de tests/smoke/, mas com a tag: as regras de smoke valem igual —
     # é a tag que decide o que o CI executa.
     ("smoke por tag, fora da pasta", SPEC_LIMPO.replace(
-        "test('cria produto'", "test('lista produtos @smoke'"), ["A3"]),
+        "test('cria produto'", "test('lista produtos @smoke'"), ["E11"]),
 ]
 
 SMOKE_LIMPO = """// spec: .memory-bank/e2e-specs/smoke.plan.md
@@ -379,14 +470,14 @@ CASOS_SMOKE = [
     ("smoke com ação mutante", SMOKE_LIMPO.replace(
         "  await page.goto('/dashboard');",
         "  await page.goto('/dashboard');\n"
-        "  await page.getByRole('button', { name: 'Salvar' }).click();"), ["A3"]),
+        "  await page.getByRole('button', { name: 'Salvar' }).click();"), ["E11"]),
 ]
 
 
 def self_test() -> int:
     import tempfile
     falhas = 0
-    total = len(CASOS_LINT) + len(CASOS_SMOKE) + 1
+    total = len(CASOS_LINT) + len(CASOS_SMOKE) + 13
     print(f"spec_lint — self-test ({total} casos)\n")
     with tempfile.TemporaryDirectory() as td:
         for nome, conteudo, esperados in CASOS_LINT:
@@ -422,6 +513,124 @@ def self_test() -> int:
         falhas += not ok
         print(f"  {'PASS' if ok else 'FALHA':5}  {'orçamento smoke (A2)':22} "
               f"esperado=['A2'] obtido={codigos or ['-']}")
+
+        extras = [
+            ("V4 parse inválido",
+             Path(td) / "bad.spec.ts",
+             "test('t', async ({ page }) => { await page.goto('/' ;;; ",
+             ["E13"]),
+            ("V4 timeout 30_001",
+             Path(td) / "to.spec.ts",
+             SPEC_LIMPO.replace(
+                 "toBeVisible();",
+                 "toBeVisible({ timeout: 30_001 });"),
+             ["E15"]),
+            ("V4 tag só em comentário",
+             Path(td) / "cmt.spec.ts",
+             SPEC_LIMPO.replace(
+                 "// intent:",
+                 "// @smoke\n// intent:"),
+             []),
+            ("V4 herança de describe",
+             Path(td) / "desc.spec.ts",
+             """// spec: .memory-bank/e2e-specs/smoke.plan.md
+// intent: dashboard responde autenticado depois do deploy
+import { test, expect } from '../fixtures';
+test.describe('dashboard @smoke', () => {
+  test('carrega', async ({ page }) => {
+    await page.goto('/dashboard');
+    await expect(page.getByRole('heading', { name: 'Resumo' })).toBeVisible();
+  });
+});
+""",
+             []),
+            ("V6 login excepcional",
+             pasta_smoke / "login.spec.ts",
+             """// spec: .memory-bank/e2e-specs/smoke.plan.md
+// intent: login prova autenticação
+import { test, expect } from '../fixtures';
+test('login @smoke', { tag: ['@smoke'] }, async ({ page }) => {
+  await page.getByLabel('Senha').fill(process.env.E2E_PASSWORD);
+  await page.getByRole('button', { name: 'Entrar' }).click();
+  await expect(page.getByRole('heading', { name: 'Resumo' })).toBeVisible();
+});
+""",
+             []),
+            ("V6 filtro de busca",
+             pasta_smoke / "busca.spec.ts",
+             """// spec: .memory-bank/e2e-specs/smoke.plan.md
+// intent: filtro de busca não muta registro
+import { test, expect } from '../fixtures';
+test('busca @smoke', { tag: ['@smoke'] }, async ({ page }) => {
+  await page.goto('/produtos');
+  await page.getByRole('searchbox').fill('e2e-query');
+  await page.getByRole('button', { name: 'Buscar' }).click();
+  await expect(page.getByRole('heading', { name: 'Produtos' })).toBeVisible();
+});
+""",
+             []),
+            ("V6 ação não classificada",
+             pasta_smoke / "click.spec.ts",
+             """// spec: .memory-bank/e2e-specs/smoke.plan.md
+// intent: click sem contrato
+import { test, expect } from '../fixtures';
+test('detalhe @smoke', { tag: ['@smoke'] }, async ({ page }) => {
+  await page.goto('/dashboard');
+  await page.getByRole('button', { name: 'Detalhes' }).click();
+  await expect(page.getByRole('heading', { name: 'Resumo' })).toBeVisible();
+});
+""",
+             ["E12"]),
+            ("V6 verbo só em comentário",
+             pasta_smoke / "cmt-acao.spec.ts",
+             SMOKE_LIMPO.replace(
+                 "  await page.goto('/dashboard');",
+                 "  // clique em Salvar para criar\n"
+                 "  await page.goto('/dashboard');"),
+             []),
+            ("V6 excluir domínio",
+             pasta_smoke / "del.spec.ts",
+             SMOKE_LIMPO.replace(
+                 "  await page.goto('/dashboard');",
+                 "  await page.goto('/dashboard');\n"
+                 "  await page.getByRole('button', { name: 'Excluir' }).click();"),
+             ["E11"]),
+        ]
+        for nome, arq, conteudo, esperados in extras:
+            arq.write_text(conteudo, encoding="utf-8")
+            codigos = sorted({a.codigo for a in analisar_spec(arq)})
+            ok = codigos == sorted(esperados)
+            falhas += not ok
+            print(f"  {'PASS' if ok else 'FALHA':5}  {nome:22} "
+                  f"esperado={esperados or ['-']} obtido={codigos or ['-']}")
+
+        vazia = Path(td) / "vazia"
+        vazia.mkdir()
+        achados_vazio, _, _ = lint(vazia)
+        ok = "E14" in {a.codigo for a in achados_vazio}
+        falhas += not ok
+        print(f"  {'PASS' if ok else 'FALHA':5}  {'V4 inventário vazio':22} "
+              f"esperado=['E14'] obtido={sorted({a.codigo for a in achados_vazio}) or ['-']}")
+
+        achados_raiz, _, _ = lint(Path(td) / "nao-existe")
+        ok = "E14" in {a.codigo for a in achados_raiz}
+        falhas += not ok
+        print(f"  {'PASS' if ok else 'FALHA':5}  {'V4 raiz inexistente':22} "
+              f"esperado=['E14'] obtido={sorted({a.codigo for a in achados_raiz}) or ['-']}")
+
+        parcial = pasta_smoke / "parcial.spec.ts"
+        parcial.write_text(
+            SMOKE_LIMPO + "\n"
+            "test('sem tag', async ({ page }) => {\n"
+            "  await page.goto('/x');\n"
+            "  await expect(page.getByRole('heading')).toBeVisible();\n"
+            "});\n",
+            encoding="utf-8",
+        )
+        ok = "E9" in {a.codigo for a in analisar_spec(parcial)}
+        falhas += not ok
+        print(f"  {'PASS' if ok else 'FALHA':5}  {'V4 suíte parcial':22} "
+              f"esperado=['E9'] obtido={sorted({a.codigo for a in analisar_spec(parcial)}) or ['-']}")
     print()
     if falhas:
         print(f"{falhas} caso(s) divergente(s).")
@@ -445,9 +654,6 @@ def main() -> int:
     if not args.caminho:
         ap.print_usage()
         print("\nInforme um caminho, ou use --self-test.", file=sys.stderr)
-        return ERRO_DE_USO
-    if not args.caminho.exists():
-        print(f"caminho não encontrado: {args.caminho}", file=sys.stderr)
         return ERRO_DE_USO
 
     achados, n_spec, n_po = lint(args.caminho)
