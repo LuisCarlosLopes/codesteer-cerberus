@@ -190,13 +190,21 @@ Com `.spec.md` aprovado, o passo PLAN gera
   a menos que o plan precise de um recorte
 - Escopo/mutations herdados do guard
 - Citação explícita em cada cenário: `Fonte: <feature>.spec.md#CA-01`
+- Campos operacionais no Markdown existente (sem schema versionado novo):
+  cenário, intent, precondições, ações, asserções, prioridade, dados e
+  efeitos de domínio
+- Cada spec gerado/curado declara `// test-id:` estável
+- `draft` / `observed` **não** viram `approved` por mover, renomear ou gerar
+  a partir da UI
 
 Em `regression` sem spec aprovada, o plan continua podendo descrever o
-comportamento observado — sem campo `Fonte:` de critérios.
+comportamento observado — sem campo `Fonte:` de critérios. Healing que edita
+plano, requisito ou cenário é recusado.
 
 ## Headers nos testes gerados
 
 ```ts
+// test-id: cadastro-ca-01
 // truth: .memory-bank/e2e-specs/cadastro.spec.md#CA-01
 // spec:  .memory-bank/e2e-specs/cadastro.plan.md
 // intent: cliente da tabela Válidos aparece na lista como Ativo

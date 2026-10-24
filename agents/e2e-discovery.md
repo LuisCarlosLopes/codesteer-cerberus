@@ -78,6 +78,11 @@ De 3 a 8 fluxos que, quebrados, justificariam rollback. Para cada um: rota,
 sinal de domínio que prova que respondeu (heading, número, primeira linha),
 e se é alcançável sem criar dado.
 
+## Lacunas
+| Área | explorado | parcial | bloqueado | Motivo |
+| :--- | :---: | :---: | :---: | :--- |
+Não invente seletor. Nível D, MFA e autorização bloqueiam geração.
+
 ## Riscos
 Modais, confirmações, paginação, dados compartilhados entre testes,
 qualquer coisa que torne um teste dependente de outro.

@@ -29,6 +29,14 @@ Se o snapshot já traz `role` e `name` úteis para os elementos que importam,
 você está em B ou acima. Se os elementos aparecem sem nome acessível e só são
 alcançáveis por seletor estrutural, você está em D.
 
+## Papel+nome e testid são equivalentes
+
+Nenhum dos dois contratos é inferior por política. O caso declara o **alvo de
+domínio**, o **escopo** da entidade e a **cardinalidade** (um, todos, primeiro
+de uma lista). `getByRole('button', { name: 'Salvar' })` e
+`getByTestId('produto-salvar')` são aceitos quando esses três campos estão
+explícitos. Nível D continua bloqueando geração.
+
 ## Nível D bloqueia
 
 Não gere testes. Escreva `selector-recommendations.md` e entregue ao usuário:

@@ -5,6 +5,11 @@
 >
 > Login por teste é lento, frágil, polui o log de auditoria da aplicação e
 > transforma qualquer instabilidade da tela de login em falha de toda a suíte.
+>
+> **Exceção única:** o caso que **prova autenticação** (sessão vazia, credencial
+> em `E2E_*`, asserção de sinal de domínio depois de entrar). Os demais testes
+> não logam. Cleanup usa IDs pertencentes ao run — é idempotente e relata
+> resíduo; não apaga dado compartilhado por prefixo amplo.
 
 A mecânica de sessão (`state-save`, `state-load`, cookies, storage) está na
 skill oficial `playwright-cli`, reference `storage-state.md`. Este documento

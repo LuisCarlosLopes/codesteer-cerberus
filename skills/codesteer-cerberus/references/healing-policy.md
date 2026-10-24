@@ -41,14 +41,14 @@ await expect( page.getByRole('row').filter({ hasText: 'A' }).getByTestId('cel') 
 | Matcher: nome, argumentos, `not.` | **Congelado.** Alterou → rejeita |
 | Contagem de asserções | **Congelada.** Alterou → rejeita |
 | Header `// intent:` | **Congelado.** Alterado ou removido → rejeita |
-| Locator dentro de `expect()` | Mutável **sob prova de mesmo elemento** |
+| Locator dentro de `expect()` | Mutável **sob prova de mesmo alvo de domínio** |
 | Locator fora de `expect()` (ações) | Livre |
 | `timeout` | Livre até o teto de 30s |
 
 `timeout` é a única opção do matcher que não conta como semântica. Opções que
 mudam o significado — `ignoreCase`, `useInnerText` — permanecem congeladas.
 
-## Prova de mesmo elemento
+## Prova de mesmo alvo de domínio
 
 Mudar o locator dentro de uma asserção abriria a porta para apontá-la a um
 elemento diferente que a satisfaça trivialmente:
@@ -62,7 +62,11 @@ await expect(page.getByTestId('rodape-exemplo')).toHaveText('10');
 
 Por isso o gate devolve **exit 2** nesse caso, não exit 0. Antes de aplicar,
 confirme com `playwright-cli snapshot` que o locator novo resolve para o **mesmo
-nó** que o antigo. Sem essa confirmação, trate como rejeitado.
+alvo de domínio** (entidade, papel+nome ou testid, cardinalidade, escopo) — não
+o “mesmo nó DOM”. Sem essa confirmação, trate como rejeitado. Locator em
+PO/helper exige no mínimo exit 2 e análise de impacto; o host só aplica o
+**hash validado** do candidato. Superfície (fixture, mock, config, import
+dinâmico) compara-se com `--baseline` contra o manifesto do host.
 
 ## Tabela de permissões
 
