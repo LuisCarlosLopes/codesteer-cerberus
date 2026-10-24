@@ -58,7 +58,9 @@ EXIT CODES
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import sys
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -240,10 +242,116 @@ def gate(antes: bytes, depois: bytes, exigir_intent: bool = True) -> Verdict:
             "APROVA_COM_PROVA", APROVA_COM_PROVA,
             "locator de asserção mudou — confirme no trace que o locator novo "
             "resolve para o MESMO alvo de domínio antes de aplicar",
-            {"trocas": trocas},
+            {"trocas": trocas, "alvo_dominio": inferir_alvo_dominio(trocas[0]["depois"])},
         )
 
     return Verdict("APROVA", APROVA, "nenhuma violação de política", {})
+
+
+def inferir_alvo_dominio(locator: str) -> dict:
+    testid = re.search(r"getByTestId\(\s*['\"]([^'\"]+)", locator)
+    role = re.search(r"getByRole\(\s*['\"]([^'\"]+)", locator)
+    name = re.search(r"name:\s*['\"]([^'\"]+)", locator)
+    entidade = (name.group(1) if name else
+                (testid.group(1) if testid else "desconhecida"))
+    if role:
+        papel = f"role:{role.group(1)}" + (f":{name.group(1)}" if name else "")
+    elif testid:
+        papel = f"testid:{testid.group(1)}"
+    else:
+        papel = "desconhecido"
+    return {
+        "entidade": entidade,
+        "papel_ou_testid": papel,
+        "cardinalidade": "one",
+        "escopo": "pagina",
+    }
+
+
+def _sha256(caminho: Path) -> str:
+    return "sha256:" + hashlib.sha256(caminho.read_bytes()).hexdigest()
+
+
+_PROTECTED = ("fixture", "mock", "playwright.config", "storagestate", "global-setup")
+
+
+def comparar_superficie(
+    manifesto: dict,
+    surface: Path,
+    evidencias: dict | None = None,
+    manifesto_path: Path | None = None,
+) -> Verdict:
+    """Compara a superfície candidata ao ManifestoDeBaseline do host.
+
+    @MindSpec: Sem manifesto suficiente, baseline do candidato, import dinâmico
+    ou mudança de fixture/config → REJEITA. Locator em PO/helper → no mínimo exit 2.
+    """
+    from validate_evidence import validar
+
+    erros = validar("baseline", manifesto)
+    if erros:
+        return Verdict("REJEITA", REJEITA, "manifesto de baseline insuficiente",
+                       {"errors": erros})
+    if not surface.exists():
+        return Verdict("REJEITA", REJEITA, "superfície candidata inexistente",
+                       {"surface": str(surface)})
+    if manifesto_path is not None:
+        try:
+            manifesto_path.resolve().relative_to(surface.resolve())
+            return Verdict(
+                "REJEITA", REJEITA,
+                "baseline sob controle do candidato — hash local não aprova",
+                {"baseline": str(manifesto_path)},
+            )
+        except ValueError:
+            pass
+
+    hashes = manifesto.get("content_hashes") or {}
+    trocas_po = []
+    for path in sorted(p for p in surface.rglob("*") if p.is_file()):
+        if IGNORAR & set(path.parts):
+            continue
+        rel = path.relative_to(surface).as_posix()
+        nome = (rel + " " + path.name).lower()
+        if path.suffix in {".ts", ".js", ".tsx"}:
+            suite = parse_suite(path.read_bytes(), str(path))
+            if any(imp.dynamic for imp in suite.imports):
+                return Verdict("REJEITA", REJEITA, "import dinâmico",
+                               {"arquivo": rel})
+            if any(imp.outside_root for imp in suite.imports):
+                return Verdict("REJEITA", REJEITA, "dependência fora da raiz",
+                               {"arquivo": rel})
+        protegido = any(h in nome for h in _PROTECTED)
+        esperado = hashes.get(rel)
+        atual = _sha256(path) if path.is_file() else None
+        if protegido and esperado != atual:
+            return Verdict(
+                "REJEITA", REJEITA,
+                "fixture, mock, config ou seleção alterados sem revisão",
+                {"arquivo": rel},
+            )
+        eh_po = path.match("*.page.ts") or path.match("*.po.ts") or "helper" in nome
+        if eh_po and esperado and esperado != atual:
+            trocas_po.append(rel)
+
+    if trocas_po:
+        prova = bool(evidencias and evidencias.get("mesmo_alvo"))
+        if not prova:
+            return Verdict(
+                "APROVA_COM_PROVA", APROVA_COM_PROVA,
+                "locator em PO/helper mudou — exige prova de mesmo alvo e "
+                "impacto nos specs dependentes. Ausência de expect no PO "
+                "não autoriza a troca.",
+                {"arquivos": trocas_po, "alvo_dominio": inferir_alvo_dominio("")},
+            )
+        return Verdict(
+            "APROVA_COM_PROVA", APROVA_COM_PROVA,
+            "locator em PO/helper mudou com evidência de mesmo alvo de domínio",
+            {"arquivos": trocas_po, "alvo_dominio": evidencias.get("alvo_dominio")
+             if evidencias else inferir_alvo_dominio("")},
+        )
+
+    return Verdict("APROVA", APROVA, "superfície alinhada à baseline do host", {})
 
 
 # ------------------------------------------------------- invariante do POM
@@ -540,11 +648,33 @@ def main() -> int:
                          "se o header existir nos dois arquivos, ainda é comparado)")
     ap.add_argument("--check-po", type=Path, metavar="DIR",
                     help="verifica que nenhum page object contém asserção")
+    ap.add_argument("--baseline", type=Path,
+                    help="ManifestoDeBaseline.json (opt-in, modo de projeto)")
+    ap.add_argument("--surface", type=Path,
+                    help="diretório da superfície candidata")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
 
     if args.self_test:
         return self_test()
+
+    if args.baseline or args.surface:
+        if not args.baseline or not args.surface:
+            print("--baseline e --surface são obrigatórios juntos.", file=sys.stderr)
+            return ERRO_DE_USO
+        if not args.baseline.is_file() or not args.surface.exists():
+            print("baseline ou superfície não encontrada.", file=sys.stderr)
+            return ERRO_DE_USO
+        try:
+            manifesto = json.loads(args.baseline.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            print(json.dumps({"decision": "REJEITA", "exit_code": REJEITA,
+                              "reason": f"baseline inválida: {e}", "detail": {}},
+                             ensure_ascii=False, indent=2))
+            return REJEITA
+        return comparar_superficie(
+            manifesto, args.surface, manifesto_path=args.baseline,
+        ).emit()
 
     if args.check_po:
         if not args.check_po.exists():

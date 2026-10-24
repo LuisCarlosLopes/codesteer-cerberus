@@ -71,6 +71,10 @@ ERROS = {
     "E007": "--allow-production exige --allowlist apontando para um arquivo existente.",
     "E008": "fonte de verdade em draft (ou sem status approved); "
             "aprove o .spec.md antes de usar --truth em spec-driven.",
+    "E009": "política estrita inválida.",
+    "E010": "alvo fora da origem autorizada pela política.",
+    "E011": "hash da política diverge do registro de aprovação.",
+    "E012": "HITL pendente no perfil estrito — execução bloqueada.",
 }
 
 # Front matter YAML mínimo (só chave: valor em linha). Sem dependência PyYAML.
@@ -138,9 +142,13 @@ class Decisao:
     errors: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     hitl: list[str] = field(default_factory=list)
+    policy_profile: str | None = None
 
     def emit(self) -> int:
-        print(json.dumps(asdict(self), ensure_ascii=False, indent=2))
+        data = asdict(self)
+        if data.get("policy_profile") is None:
+            data.pop("policy_profile", None)
+        print(json.dumps(data, ensure_ascii=False, indent=2))
         return self.exit_code
 
 
@@ -167,12 +175,73 @@ def ler_allowlist(caminho: Path | None) -> set[str]:
     return entradas
 
 
+def _porta(parsed) -> int:
+    if parsed.port:
+        return parsed.port
+    return 443 if parsed.scheme == "https" else 80
+
+
+def origem_compativel(url: str, origem: str) -> bool:
+    a, b = urlparse(url), urlparse(origem)
+    if a.scheme not in {"http", "https"}:
+        return False
+    if a.scheme != b.scheme:
+        return False
+    ha = (a.hostname or "").lower()
+    hb = (b.hostname or "").lower()
+    if ha != hb:
+        return False
+    return _porta(a) == _porta(b)
+
+
+def validar_politica_estrita(
+    url: str,
+    mode: str,
+    politica: dict,
+    registro: dict | None = None,
+    ambiente: str = "unknown",
+) -> list[dict]:
+    """Perfil estrito: política, alvo, hash e HITL — fail-closed.
+
+    @MindSpec: HITL pendente, alvo ≠ origem, hash divergente ou política
+    inválida → errors[] e approved false. Sem curinga amplo.
+    """
+    from validate_evidence import validar
+
+    out: list[dict] = []
+    schema_errs = validar("policy", politica)
+    if schema_errs:
+        out.append(erro("E009", "; ".join(schema_errs)))
+        return out
+    if modo_ok := politica.get("mode"):
+        if modo_ok != mode:
+            out.append(erro("E010", f"mode da política={modo_ok!r} url mode={mode!r}"))
+    origins = politica.get("origins") or {}
+    origem = origins.get(ambiente) or origins.get("local")
+    if not origem or not origem_compativel(url, origem):
+        out.append(erro("E010", f"url={url!r} origem={origem!r} ambiente={ambiente}"))
+    if registro is None:
+        out.append(erro("E012"))
+        return out
+    esperado = politica.get("content_hash")
+    obtido = registro.get("policy_hash") or registro.get("content_hash")
+    if not obtido or obtido != esperado:
+        out.append(erro("E011", f"esperado={esperado!r}"))
+    if registro.get("mode") and registro["mode"] != mode:
+        out.append(erro("E010", "registro.mode diverge"))
+    if registro.get("target") and not origem_compativel(url, registro["target"]):
+        out.append(erro("E010", "registro.target diverge"))
+    return out
+
+
 def avaliar(
     url: str,
     mode: str,
     truth: str | None = None,
     allow_production: bool = False,
     allowlist_path: Path | None = None,
+    policy: dict | None = None,
+    approval_record: dict | None = None,
 ) -> Decisao:
     erros: list[dict] = []
     avisos: list[str] = []
@@ -264,6 +333,16 @@ def avaliar(
     if ambiente == "production" and not allow_production:
         erros.append(erro("E002", f"host: {host}"))
 
+    perfil = None
+    if policy is not None:
+        perfil = "strict"
+        erros.extend(validar_politica_estrita(
+            url, mode, policy, approval_record, ambiente=ambiente or "unknown",
+        ))
+        if hitl:
+            erros.append(erro("E012"))
+            hitl = []
+
     aprovado = not erros
     return Decisao(
         approved=aprovado,
@@ -278,6 +357,7 @@ def avaliar(
         errors=erros,
         warnings=avisos,
         hitl=hitl,
+        policy_profile=perfil,
     )
 
 
@@ -384,7 +464,7 @@ def self_test() -> int:
              True, "production", True, None),
         ]
 
-        total = len(CASOS) + len(casos_dinamicos) + 1   # +1: smoke/unknown → HITL
+        total = len(CASOS) + len(casos_dinamicos) + 1 + 6
         print(f"guard — self-test ({total} casos)\n")
 
         for nome, kwargs, esperado_ok, esperado_env, esperado_mut in CASOS:
@@ -424,6 +504,58 @@ def self_test() -> int:
               f"env={d.environment:11} mut={str(d.mutations_allowed):5} "
               f"scope={d.scope:5} hitl={len(d.hitl)}")
 
+        politica = {
+            "schema_version": 1,
+            "origins": {"local": "http://127.0.0.1:4173"},
+            "allowed_paths": ["evals"],
+            "mode": "smoke",
+            "scope": "RL",
+            "budget": {},
+            "approval_refs": ["r1"],
+            "content_hash": "sha256:abc",
+        }
+        registro = {
+            "operator": "ci", "origin": "host",
+            "target": "http://127.0.0.1:4173",
+            "mode": "smoke", "window": "post-deploy",
+            "policy_hash": "sha256:abc",
+        }
+        v7 = [
+            ("V7 HITL pendente no estrito",
+             dict(url="https://app.cliente.com", mode="smoke", policy=politica),
+             False, "E012"),
+            ("V7 alvo ≠ política",
+             dict(url="http://127.0.0.1:3000", mode="smoke",
+                  policy=politica, approval_record=registro),
+             False, "E010"),
+            ("V7 hash divergente",
+             dict(url="http://127.0.0.1:4173", mode="smoke",
+                  policy=politica,
+                  approval_record={**registro, "policy_hash": "sha256:zzz"}),
+             False, "E011"),
+            ("V7 política inválida",
+             dict(url="http://127.0.0.1:4173", mode="smoke",
+                  policy={"schema_version": 2}, approval_record=registro),
+             False, "E009"),
+            ("V7 IPv6/porta fora",
+             dict(url="http://[::1]:4173", mode="smoke",
+                  policy=politica, approval_record=registro),
+             False, "E010"),
+            ("V7 estrito coerente",
+             dict(url="http://127.0.0.1:4173", mode="smoke",
+                  policy=politica, approval_record=registro),
+             True, None),
+        ]
+        for nome, kwargs, esperado_ok, codigo in v7:
+            d = avaliar(**kwargs)
+            codigos_lista = [e["code"] for e in d.errors]
+            ok = (d.approved == esperado_ok
+                  and d.policy_profile == "strict"
+                  and (codigo is None or codigo in codigos_lista))
+            falhas += not ok
+            print(f"  {'PASS' if ok else 'FALHA':5}  {nome:42} "
+                  f"ok={d.approved} erros={','.join(codigos_lista) or '-'}")
+
     print()
     if falhas:
         print(f"{falhas} caso(s) divergente(s).")
@@ -443,6 +575,10 @@ def main() -> int:
     ap.add_argument("--allow-production", action="store_true")
     ap.add_argument("--allowlist", type=Path,
                     help="arquivo com hosts de produção permitidos, um por linha")
+    ap.add_argument("--policy", type=Path,
+                    help="PoliticaDeProjeto.json (opt-in, perfil estrito)")
+    ap.add_argument("--approval-record", type=Path,
+                    help="registro de aprovação vinculado ao hash da política")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
 
@@ -454,12 +590,27 @@ def main() -> int:
         print("\n--url e --mode são obrigatórios, ou use --self-test.", file=sys.stderr)
         return ERRO_DE_USO
 
+    politica = None
+    registro = None
+    if args.policy:
+        if not args.policy.is_file():
+            print(f"política não encontrada: {args.policy}", file=sys.stderr)
+            return ERRO_DE_USO
+        politica = json.loads(args.policy.read_text(encoding="utf-8"))
+    if args.approval_record:
+        if not args.approval_record.is_file():
+            print(f"registro não encontrado: {args.approval_record}", file=sys.stderr)
+            return ERRO_DE_USO
+        registro = json.loads(args.approval_record.read_text(encoding="utf-8"))
+
     return avaliar(
         url=args.url,
         mode=args.mode,
         truth=args.truth,
         allow_production=args.allow_production,
         allowlist_path=args.allowlist,
+        policy=politica,
+        approval_record=registro,
     ).emit()
 
 
