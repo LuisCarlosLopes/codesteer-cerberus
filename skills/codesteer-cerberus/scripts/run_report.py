@@ -61,22 +61,20 @@ def validar_proveniencia(
 ) -> list[str]:
     erros = validar("evidence", pacote)
     erros += recusar_credencial(pacote)
-    visto: set[tuple] = set()
     chave = chave_quádrupla(pacote)
     if None in chave:
         erros.append("chave run×teste×projeto×tentativa incompleta")
-    else:
-        visto.add(chave)
     src = pacote.get("source_executed") or {}
     src_path = src.get("path")
     if src_path:
         p = Path(src_path)
+        if not _dentro_da_raiz(p, artifacts_root):
+            erros.append(f"source_executed fora da raiz: {src_path}")
         if p.is_file():
             if src.get("hash") and src["hash"] != _sha256_file(p):
                 erros.append("hash divergente em source_executed")
-        elif src.get("hash"):
-            # arquivo ausente com hash declarado — divergência
-            pass
+        else:
+            erros.append("hash divergente em source_executed")
     for art in pacote.get("artifacts") or []:
         raw = Path(art.get("path", ""))
         if art.get("path") and not _dentro_da_raiz(raw, artifacts_root):

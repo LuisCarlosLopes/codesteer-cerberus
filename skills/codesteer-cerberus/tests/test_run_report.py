@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -138,6 +139,30 @@ def test_v11_reproducao_com_vinculo():
     a = _pkg()
     b = _pkg(run_id="run-2", original_failure_ref="run-1/t1/chromium/1")
     assert comparar_pacotes(a, b) == []
+
+
+def test_v11_source_executed_ausente(tmp_path: Path):
+    trace = tmp_path / "trace.zip"
+    trace.write_bytes(b"trace")
+    digest = "sha256:" + hashlib.sha256(b"trace").hexdigest()
+    pkg = _pkg(
+        source_executed={
+            "path": str(tmp_path / "missing.spec.ts"),
+            "hash": "sha256:" + ("a" * 64),
+        },
+        artifacts=[{"path": str(trace), "hash": digest, "present": True}],
+    )
+    erros = validar_proveniencia(pkg, tmp_path)
+    assert any("hash divergente em source_executed" in e for e in erros)
+
+
+def test_v11_source_executed_fora_da_raiz(tmp_path: Path):
+    fora = tmp_path.parent / "outside.spec.ts"
+    fora.write_text("export {};\n", encoding="utf-8")
+    digest = "sha256:" + hashlib.sha256(fora.read_bytes()).hexdigest()
+    pkg = _pkg(source_executed={"path": str(fora), "hash": digest})
+    erros = validar_proveniencia(pkg, tmp_path)
+    assert any("source_executed fora da raiz" in e for e in erros)
 
 
 def test_v11_hash_aplicado_diverge():
